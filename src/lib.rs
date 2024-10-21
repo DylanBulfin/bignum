@@ -1,14 +1,34 @@
 use std::{
     cmp::Ordering,
-    ops::{Add, AddAssign, Sub, SubAssign},
+    iter::Sum,
+    ops::{Add, AddAssign, Mul, Sub, SubAssign},
 };
 
-use utils::get_exp_u64;
+use utils::{get_exp_u64, get_pow_sum_u16};
 
 mod utils;
 
 // Equal to 2^63
 const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
+// Powers of 2
+const VALID_DENOMS: [u16; 16] = [
+    1 << 0,
+    1 << 1,
+    1 << 2,
+    1 << 3,
+    1 << 4,
+    1 << 5,
+    1 << 6,
+    1 << 7,
+    1 << 8,
+    1 << 9,
+    1 << 10,
+    1 << 11,
+    1 << 12,
+    1 << 13,
+    1 << 14,
+    1 << 15,
+];
 
 /// Marker trait used for types that can be converted into BigNum
 /// This is used to allow for easy definition of methods like Add<T>
@@ -27,10 +47,10 @@ impl BigNum {
     /// Create a BigNum instance directly (e.g. not through the From trait)
     pub fn new(base: u64, exp: u64) -> Self {
         if base == 0 && exp != 0 {
-            panic!("Invalid BigNum: base is 0 but exp is not")
+            panic!("Invalid BigNum: base is 0 but exp is {}", exp)
         }
         if base < MIN_BASE_VAL && exp != 0 {
-            panic!("Invalid BigNum: exp is non-zero but base in invalid form")
+            panic!("Invalid BigNum: exp is {} but base is {:#x}", exp, base)
         }
         BigNum {
             base,
@@ -216,6 +236,84 @@ impl Sub for BigNum {
     }
 }
 
+pub struct Ratio {
+    numerator: u16,
+    denominator: u16,
+}
+
+impl Ratio {
+    pub fn new(numerator: u16, denominator: u16) -> Self {
+        if numerator == 0 && denominator != 1 {
+            panic!("Invalid Ratio: numerator is 0 but denominator is not 1")
+        }
+        if !VALID_DENOMS.contains(&denominator) {
+            panic!("Invalid Ratio: denominator is not a power of 2")
+        }
+        Ratio {
+            numerator,
+            denominator,
+        }
+    }
+}
+
+impl Sum for BigNum {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(0.into(), |acc, x| acc + x)
+    }
+}
+
+impl Mul<u16> for BigNum {
+    type Output = Self;
+
+    fn mul(self, rhs: u16) -> Self::Output {
+        let pows = get_pow_sum_u16(rhs);
+
+        if self.exp > 0 {
+            // Number already in expanded form, easier
+            pows.into_iter()
+                .map(|p| BigNum::new(self.base, self.exp + p as u64))
+                .sum()
+        } else {
+            let max_pow = get_exp_u64(self.base);
+            pows.into_iter()
+                .map(|p| {
+                    if p as u64 + max_pow > 63 {
+                        let new_exp = p as u64 + max_pow - 63;
+                        let new_base = self.base << (new_exp - 1);
+
+                        BigNum::new(new_base, new_exp)
+                    } else {
+                        BigNum::new(self.base << p, 0)
+                    }
+                })
+                .sum()
+        }
+    }
+}
+
+impl Mul<u64> for BigNum {
+    type Output;
+
+    fn mul(self, rhs: u64) -> Self::Output {
+        todo!()
+    }
+}
+
+impl Mul<Ratio> for BigNum {
+    type Output = Self;
+
+    fn mul(self, rhs: Ratio) -> Self::Output {
+        let res = (self * rhs.numerator);
+
+        if res.exp != 0 {
+            // Already in expanded form
+            unimplemented!()
+        } else {
+            unimplemented!()
+        }
+    }
+}
+
 impl<T> Add<T> for BigNum
 where
     T: BigNumConvertable,
@@ -343,5 +441,25 @@ mod tests {
         let b: BigNum = 2.into();
 
         let _ = a - b;
+    }
+
+    #[test]
+    fn mul_u16() {
+        let a = 1u16;
+        let b = u16::MAX;
+        let c = BigNum::new(MIN_BASE_VAL, 1);
+
+        assert_eq!(c * a, c);
+        assert_eq!(c * b, BigNum::new(0xFFFF_0000_0000_0000, 16));
+
+        let d = BigNum::from(0x8000_1000_1000_1000u64);
+        let e = 2u16;
+        assert_eq!(d * e, BigNum::new(0x8000_1000_1000_1000, 1));
+
+        let f = 3u16;
+        assert_eq!(d * f, BigNum::new(0xC000_1800_1800_1800, 1));
+
+        let g = BigNum::new(0x8000_1000_1000_1000, 100);
+        assert_eq!(g * f, BigNum::new(0xC000_1800_1800_1800, 101));
     }
 }

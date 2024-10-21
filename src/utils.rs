@@ -9,6 +9,21 @@ pub fn get_exp_u64(mut n: u64) -> u64 {
     pow
 }
 
+pub fn get_pow_sum_u16(n: u16) -> Vec<u16> {
+    (0..16).filter(|i| n & 1 << i != 0).collect()
+}
+
+pub fn get_exp_u16(mut n: u16) -> u16 {
+    let mut pow = 15;
+
+    while pow > 0 && n & 0x8000 == 0 {
+        pow -= 1;
+        n <<= 1;
+    }
+
+    pow
+}
+
 #[cfg(test)]
 mod tests {
     use std::u64;
