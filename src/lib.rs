@@ -8,7 +8,7 @@ use utils::get_exp_u64;
 mod utils;
 
 // Equal to 2^63
-const TOP_BIT_MASK: u64 = 0x8000_0000_0000_0000;
+const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
 
 /// Representation of large number. Formula is base * (2 ^ exp)
 #[derive(Debug, Clone, Copy)]
@@ -25,7 +25,7 @@ impl BigNum {
         if base == 0 && exp != 0 {
             panic!("Invalid BigNum: base is 0 but exp is not")
         }
-        if base < TOP_BIT_MASK && exp != 0 {
+        if base < MIN_BASE_VAL && exp != 0 {
             panic!("Invalid BigNum: exp is non-zero but base in invalid form")
         }
         BigNum {
@@ -120,7 +120,7 @@ impl Add for BigNum {
 
             // If remainder is less than either base, overflow occurred
             if result < self.base || result < rhs.base {
-                Self::new(TOP_BIT_MASK + (result >> 1), 1)
+                Self::new(MIN_BASE_VAL + (result >> 1), 1)
             } else {
                 Self::new(result, 0)
             }
@@ -145,7 +145,7 @@ impl Add for BigNum {
                 // If result is less than either base, overflow occurred
                 if res < max.base {
                     // Wrapping occurred, need to fix things up
-                    Self::new(TOP_BIT_MASK + (res >> 1), max.exp + 1)
+                    Self::new(MIN_BASE_VAL + (res >> 1), max.exp + 1)
                 } else {
                     Self::new(res, max.exp)
                 }
@@ -195,8 +195,16 @@ impl Sub for BigNum {
             };
 
             if shift >= 64 || shift > rhs.get_full_exp() {
-                // Shifting will leave us with 0 so don't bother, return self
-                self
+                if self.base == MIN_BASE_VAL && (shift == 64 || shift == rhs.get_full_exp() + 1) {
+                    // Base is at the minimum value so we need to handle edge case
+                    // E.g. BigNum::new(0x8000_0000_0000_0000, 1) - BigNum::from(1)
+                    // shift = 1, get_full_exp = 0, so normally we would skip
+                    // But since base is at min value we need to decrease exp and normalize
+                    BigNum::new(u64::MAX, self.exp - 1)
+                } else {
+                    // Shifting will leave us with 0 so don't bother, return self
+                    self
+                }
             } else {
                 let res = self.base - (rhs.base >> shift);
 
@@ -238,44 +246,26 @@ mod tests {
         assert_eq!(a + b, 1000000000002u64.into());
 
         let c: BigNum = u64::MAX.into();
-        assert_eq!(
-            a + c,
-            BigNum::new(0x8000_0000_0000_0000, 1)
-        );
+        assert_eq!(a + c, BigNum::new(0x8000_0000_0000_0000, 1));
 
         let d = BigNum::new(0x8000_0000_0000_0000, 1);
         let e: BigNum = 2.into();
         let f: BigNum = 4.into();
         assert_eq!(a + d, d);
-        assert_eq!(
-            d + e,
-            BigNum::new(0x8000_0000_0000_0001, 1)
-        );
-        assert_eq!(
-            d + f,
-            BigNum::new(0x8000_0000_0000_0002, 1)
-        );
+        assert_eq!(d + e, BigNum::new(0x8000_0000_0000_0001, 1));
+        assert_eq!(d + f, BigNum::new(0x8000_0000_0000_0002, 1));
 
         let g = BigNum::new(0x8000_0000_0000_0000, 10000);
         let h = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
-        assert_eq!(
-            g + h,
-            BigNum::new(0x8000_0000_0000_0001, 10000)
-        );
+        assert_eq!(g + h, BigNum::new(0x8000_0000_0000_0001, 10000));
 
         let i = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
         let j = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
-        assert_eq!(
-            i + j,
-            BigNum::new(0x8000_0000_0000_0000, 10001)
-        );
+        assert_eq!(i + j, BigNum::new(0x8000_0000_0000_0000, 10001));
 
         let k = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
         let l = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
-        assert_eq!(
-            k + l,
-            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10001)
-        );
+        assert_eq!(k + l, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10001));
     }
 
     #[test]
@@ -291,22 +281,13 @@ mod tests {
         let d = BigNum::new(0x8000_0000_0000_0000, 1);
         let e: BigNum = 2.into();
         let f: BigNum = 4.into();
-        assert_eq!(d - b, d);
-        assert_eq!(
-            d - e,
-            BigNum::new(0xFFFF_FFFF_FFFF_FFFE,0)
-        );
-        assert_eq!(
-            d - f,
-            BigNum::new(0x7FFF_FFFF_FFFF_FFFE, 1)
-        );
+        assert_eq!(d - b, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 0));
+        assert_eq!(d - e, BigNum::new(0xFFFF_FFFF_FFFF_FFFE, 0));
+        assert_eq!(d - f, BigNum::new(0xFFFF_FFFF_FFFF_FFFC, 0));
 
         let g = BigNum::new(0x8000_0000_0000_0001, 10000);
         let h = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
-        assert_eq!(
-            g - h,
-            BigNum::new(0x8000_0000_0000_0000, 10000)
-        );
+        assert_eq!(g - h, BigNum::new(0x8000_0000_0000_0000, 10000));
 
         assert_eq!(a - a, 0u64.into());
         assert_eq!(b - b, 0u64.into());
