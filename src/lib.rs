@@ -15,10 +15,12 @@ const TOP_BIT_MASK: u64 = 0x8000_0000_0000_0000;
 pub struct BigNum {
     base: u64,
     exp: u64,
+    // This field keeps me from accidentally constructing this struct manually
+    invalidate: bool,
 }
 
 impl BigNum {
-    /// Create 
+    /// Create a BigNum instance directly (e.g. not through the From trait)
     pub fn new(base: u64, exp: u64) -> Self {
         if base == 0 && exp != 0 {
             panic!("Invalid BigNum: base is 0 but exp is not")
@@ -26,7 +28,11 @@ impl BigNum {
         if base < TOP_BIT_MASK && exp != 0 {
             panic!("Invalid BigNum: exp is non-zero but base in invalid form")
         }
-        BigNum { base, exp }
+        BigNum {
+            base,
+            exp,
+            invalidate: false,
+        }
     }
 
     /// The exponent x such that self = c * 2^x for some c between 0 and 1
@@ -42,73 +48,49 @@ impl BigNum {
 
 impl From<u64> for BigNum {
     fn from(value: u64) -> Self {
-        BigNum {
-            base: value,
-            exp: 0,
-        }
+        BigNum::new(value, 0)
     }
 }
 
 impl From<u32> for BigNum {
     fn from(value: u32) -> Self {
-        BigNum {
-            base: value as u64,
-            exp: 0,
-        }
+        BigNum::new(value as u64, 0)
     }
 }
 
 impl From<u16> for BigNum {
     fn from(value: u16) -> Self {
-        BigNum {
-            base: value as u64,
-            exp: 0,
-        }
+        BigNum::new(value as u64, 0)
     }
 }
 
 impl From<u8> for BigNum {
     fn from(value: u8) -> Self {
-        BigNum {
-            base: value as u64,
-            exp: 0,
-        }
+        BigNum::new(value as u64, 0)
     }
 }
 
 impl From<i64> for BigNum {
     fn from(value: i64) -> Self {
-        BigNum {
-            base: value as u64,
-            exp: 0,
-        }
+        BigNum::new(value as u64, 0)
     }
 }
 
 impl From<i32> for BigNum {
     fn from(value: i32) -> Self {
-        BigNum {
-            base: value as u64,
-            exp: 0,
-        }
+        BigNum::new(value as u64, 0)
     }
 }
 
 impl From<i16> for BigNum {
     fn from(value: i16) -> Self {
-        BigNum {
-            base: value as u64,
-            exp: 0,
-        }
+        BigNum::new(value as u64, 0)
     }
 }
 
 impl From<i8> for BigNum {
     fn from(value: i8) -> Self {
-        BigNum {
-            base: value as u64,
-            exp: 0,
-        }
+        BigNum::new(value as u64, 0)
     }
 }
 
@@ -138,15 +120,9 @@ impl Add for BigNum {
 
             // If remainder is less than either base, overflow occurred
             if result < self.base || result < rhs.base {
-                Self {
-                    base: TOP_BIT_MASK + (result >> 1),
-                    exp: 1,
-                }
+                Self::new(TOP_BIT_MASK + (result >> 1), 1)
             } else {
-                Self {
-                    base: result,
-                    exp: 0,
-                }
+                Self::new(result, 0)
             }
         } else {
             // At least one of the numbers is in expanded form, first find which is bigger
@@ -169,15 +145,9 @@ impl Add for BigNum {
                 // If result is less than either base, overflow occurred
                 if res < max.base {
                     // Wrapping occurred, need to fix things up
-                    Self {
-                        base: TOP_BIT_MASK + (res >> 1),
-                        exp: max.exp + 1,
-                    }
+                    Self::new(TOP_BIT_MASK + (res >> 1), max.exp + 1)
                 } else {
-                    Self {
-                        base: res,
-                        exp: max.exp,
-                    }
+                    Self::new(res, max.exp)
                 }
             }
         }
@@ -215,10 +185,7 @@ impl Sub for BigNum {
 
         if rhs.exp == 0 && self.exp == 0 {
             // Both are in compact form, and since self > rhs we know we won't underflow
-            Self {
-                base: self.base - rhs.base,
-                exp: 0,
-            }
+            Self::new(self.base - rhs.base, 0)
         } else {
             // Find how much we need to shift the smaller number to align
             let shift = if rhs.exp == 0 {
@@ -236,15 +203,12 @@ impl Sub for BigNum {
                 // We know that underflow won't happen, but if numbers are equal
                 // we need to handle 0 case
                 if res == 0 {
-                    Self { base: 0, exp: 0 }
+                    Self::new(0, 0)
                 } else {
                     // If new resulting base is not in range we need to fix
                     let adjustment = 63 - get_exp_u64(res);
 
-                    Self {
-                        base: res << adjustment,
-                        exp: self.exp - adjustment,
-                    }
+                    Self::new(res << adjustment, self.exp - adjustment)
                 }
             }
         }
@@ -276,80 +240,41 @@ mod tests {
         let c: BigNum = u64::MAX.into();
         assert_eq!(
             a + c,
-            BigNum {
-                base: 0x8000_0000_0000_0000,
-                exp: 1
-            }
+            BigNum::new(0x8000_0000_0000_0000, 1)
         );
 
-        let d = BigNum {
-            base: 0x8000_0000_0000_0000,
-            exp: 1,
-        };
+        let d = BigNum::new(0x8000_0000_0000_0000, 1);
         let e: BigNum = 2.into();
         let f: BigNum = 4.into();
         assert_eq!(a + d, d);
         assert_eq!(
             d + e,
-            BigNum {
-                base: 0x8000_0000_0000_0001,
-                exp: 1
-            }
+            BigNum::new(0x8000_0000_0000_0001, 1)
         );
         assert_eq!(
             d + f,
-            BigNum {
-                base: 0x8000_0000_0000_0002,
-                exp: 1
-            }
+            BigNum::new(0x8000_0000_0000_0002, 1)
         );
 
-        let g = BigNum {
-            base: 0x8000_0000_0000_0000,
-            exp: 10000,
-        };
-        let h = BigNum {
-            base: 0xFFFF_FFFF_FFFF_FFFF,
-            exp: 9937,
-        };
+        let g = BigNum::new(0x8000_0000_0000_0000, 10000);
+        let h = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
         assert_eq!(
             g + h,
-            BigNum {
-                base: 0x8000_0000_0000_0001,
-                exp: 10000
-            }
+            BigNum::new(0x8000_0000_0000_0001, 10000)
         );
 
-        let i = BigNum {
-            base: 0xFFFF_FFFF_FFFF_FFFF,
-            exp: 10000,
-        };
-        let j = BigNum {
-            base: 0xFFFF_FFFF_FFFF_FFFF,
-            exp: 9937,
-        };
+        let i = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
+        let j = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
         assert_eq!(
             i + j,
-            BigNum {
-                base: 0x8000_0000_0000_0000,
-                exp: 10001
-            }
+            BigNum::new(0x8000_0000_0000_0000, 10001)
         );
 
-        let k = BigNum {
-            base: 0xFFFF_FFFF_FFFF_FFFF,
-            exp: 10000,
-        };
-        let l = BigNum {
-            base: 0xFFFF_FFFF_FFFF_FFFF,
-            exp: 10000,
-        };
+        let k = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
+        let l = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
         assert_eq!(
             k + l,
-            BigNum {
-                base: 0xFFFF_FFFF_FFFF_FFFF,
-                exp: 10001
-            }
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10001)
         );
     }
 
@@ -363,42 +288,24 @@ mod tests {
         let c: BigNum = 0x8000_0000_0000_0000u64.into();
         assert_eq!(c - b, 0x7FFF_FFFF_FFFF_FFFFu64.into());
 
-        let d = BigNum {
-            base: 0x8000_0000_0000_0000,
-            exp: 1,
-        };
+        let d = BigNum::new(0x8000_0000_0000_0000, 1);
         let e: BigNum = 2.into();
         let f: BigNum = 4.into();
         assert_eq!(d - b, d);
         assert_eq!(
             d - e,
-            BigNum {
-                base: 0x7FFF_FFFF_FFFF_FFFF,
-                exp: 1
-            }
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFE,0)
         );
         assert_eq!(
             d - f,
-            BigNum {
-                base: 0x7FFF_FFFF_FFFF_FFFE,
-                exp: 1
-            }
+            BigNum::new(0x7FFF_FFFF_FFFF_FFFE, 1)
         );
 
-        let g = BigNum {
-            base: 0x8000_0000_0000_0001,
-            exp: 10000,
-        };
-        let h = BigNum {
-            base: 0xFFFF_FFFF_FFFF_FFFF,
-            exp: 9937,
-        };
+        let g = BigNum::new(0x8000_0000_0000_0001, 10000);
+        let h = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
         assert_eq!(
             g - h,
-            BigNum {
-                base: 0x8000_0000_0000_0000,
-                exp: 10000
-            }
+            BigNum::new(0x8000_0000_0000_0000, 10000)
         );
 
         assert_eq!(a - a, 0u64.into());
