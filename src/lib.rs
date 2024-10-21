@@ -216,7 +216,10 @@ impl Sub for BigNum {
     }
 }
 
-impl<T> Add<T> for BigNum where T: BigNumConvertable {
+impl<T> Add<T> for BigNum
+where
+    T: BigNumConvertable,
+{
     type Output = Self;
 
     fn add(self, rhs: T) -> Self::Output {
@@ -230,13 +233,19 @@ impl AddAssign for BigNum {
     }
 }
 
-impl<T> AddAssign<T> for BigNum where T: BigNumConvertable {
+impl<T> AddAssign<T> for BigNum
+where
+    T: BigNumConvertable,
+{
     fn add_assign(&mut self, rhs: T) {
         *self = *self + rhs.into();
     }
 }
 
-impl<T> Sub<T> for BigNum where T: BigNumConvertable {
+impl<T> Sub<T> for BigNum
+where
+    T: BigNumConvertable,
+{
     type Output = Self;
 
     fn sub(self, rhs: T) -> Self::Output {
@@ -250,7 +259,10 @@ impl SubAssign for BigNum {
     }
 }
 
-impl<T> SubAssign<T> for BigNum where T: BigNumConvertable {
+impl<T> SubAssign<T> for BigNum
+where
+    T: BigNumConvertable,
+{
     fn sub_assign(&mut self, rhs: T) {
         *self = *self - rhs.into();
     }
@@ -322,5 +334,14 @@ mod tests {
         assert_eq!(f - f, 0u64.into());
         assert_eq!(g - g, 0u64.into());
         assert_eq!(h - h, 0u64.into());
+    }
+
+    #[should_panic]
+    #[test]
+    fn sub_overflow() {
+        let a: BigNum = 1.into();
+        let b: BigNum = 2.into();
+
+        let _ = a - b;
     }
 }
