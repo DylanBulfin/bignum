@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    ops::{Add, AddAssign, Sub},
+    ops::{Add, AddAssign, Sub, SubAssign},
 };
 
 use utils::get_exp_u64;
@@ -9,6 +9,10 @@ mod utils;
 
 // Equal to 2^63
 const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
+
+/// Marker trait used for types that can be converted into BigNum
+/// This is used to allow for easy definition of methods like Add<T>
+pub trait BigNumConvertable: Into<BigNum> {}
 
 /// Representation of large number. Formula is base * (2 ^ exp)
 #[derive(Debug, Clone, Copy)]
@@ -94,6 +98,15 @@ impl From<i8> for BigNum {
     }
 }
 
+impl BigNumConvertable for u64 {}
+impl BigNumConvertable for u32 {}
+impl BigNumConvertable for u16 {}
+impl BigNumConvertable for u8 {}
+impl BigNumConvertable for i64 {}
+impl BigNumConvertable for i32 {}
+impl BigNumConvertable for i16 {}
+impl BigNumConvertable for i8 {}
+
 impl PartialEq for BigNum {
     fn eq(&self, other: &Self) -> bool {
         self.base == other.base && self.exp == other.exp
@@ -154,26 +167,6 @@ impl Add for BigNum {
     }
 }
 
-impl Add<u64> for BigNum {
-    type Output = Self;
-
-    fn add(self, rhs: u64) -> Self::Output {
-        self + BigNum::from(rhs)
-    }
-}
-
-impl AddAssign for BigNum {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
-impl AddAssign<u64> for BigNum {
-    fn add_assign(&mut self, rhs: u64) {
-        *self = *self + rhs;
-    }
-}
-
 impl Sub for BigNum {
     type Output = Self;
 
@@ -223,11 +216,43 @@ impl Sub for BigNum {
     }
 }
 
-impl Sub<u64> for BigNum {
+impl<T> Add<T> for BigNum where T: BigNumConvertable {
     type Output = Self;
 
-    fn sub(self, rhs: u64) -> Self::Output {
-        self - BigNum::from(rhs)
+    fn add(self, rhs: T) -> Self::Output {
+        self + rhs.into()
+    }
+}
+
+impl AddAssign for BigNum {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl<T> AddAssign<T> for BigNum where T: BigNumConvertable {
+    fn add_assign(&mut self, rhs: T) {
+        *self = *self + rhs.into();
+    }
+}
+
+impl<T> Sub<T> for BigNum where T: BigNumConvertable {
+    type Output = Self;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        self - rhs.into()
+    }
+}
+
+impl SubAssign for BigNum {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
+impl<T> SubAssign<T> for BigNum where T: BigNumConvertable {
+    fn sub_assign(&mut self, rhs: T) {
+        *self = *self - rhs.into();
     }
 }
 
