@@ -27,32 +27,13 @@ We want as much information in the base as possible so we have to restrict it to
         - Will still use it if my library ends up being less performant 
         
 ## Multiplication/Division
-- It's probably not useful to multiply the big numbers together (?)
-    - They will mostly be used in an idle game, e.g.
-        - Need to be multiplied by smaller value (unit count) to find total profits
-        - Need to be multiplied by ratio when a unit is bought, since price rises by ratio
-        - Neither case needs to multiply large numbers by each other
-    - Would be inefficient and I would need to handle edge cases
-- Division is really difficult and arbitrary division is probably not useful either
-    - Division by powers of 2 is very easy
-- Alternative: Ratios
-    - Special type Ratio with u8/u16 numerator/denominator
-    - Limit denominator to powers of 2 (turns division into bitshift)
-        - Up to 2^15 = 32768
-    - Limit numerator to 
-        - Up to u16::MAX = 65535
-    - Gives effective range from 1/32768 up to 65535/1
-    - Multiplication strat:
-        - Represent n as sum of powers of 2: `n = 2^a + 2^b + ... + 2^z`
-        - Multiplication by power of 2 = bit shift
-        - Max of 16 powers of 2,
-        - E.g. needs up to 16 bit shift + sum operations, much less than arbitrary multiplication
-- TODO: consider using above strategy to enable arbitrary (if inefficient) multiplication
-- Other thoughts:
-    - For multiplication we could use u128. E.g. cast a and b to u128, multiply, parse back to BigNum format
-        - This is simple but possibly inefficient?
-        - TODO: Test against the strat described above
+After some benchmarking it seems that instead of a custom multiplication solution, the easiest thing to do is lift everything into `u128`s, multiply, and then normalize.
+- Same probably works with division
 
+For division use the following steps:
+- lift lhs to the top half of u128 by `(lhs as u128) << 64`
+- lift rhs to bottom half of u128 by `rhs as u128`
+- Normalize the result 
 
 ### Limitations
 Since we only store 64 bits of actual information higher numbers are inherently imprecise

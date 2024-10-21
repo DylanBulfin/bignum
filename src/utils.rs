@@ -1,27 +1,11 @@
-pub fn get_exp_u64(mut n: u64) -> u64 {
-    let mut pow = 63;
-
-    while pow > 0 && n & 0x8000_0000_0000_0000 == 0 {
-        pow -= 1;
-        n <<= 1;
-    }
-
-    pow
+/// Get the highest exp x such that n > 2^x
+pub fn get_exp_u64(n: u64) -> u64 {
+    (0..64).rev().find(|i| 1 << i & n != 0).unwrap_or(0)
 }
 
-pub fn get_pow_sum_u16(n: u16) -> Vec<u16> {
-    (0..16).filter(|i| n & 1 << i != 0).collect()
-}
-
-pub fn get_exp_u16(mut n: u16) -> u16 {
-    let mut pow = 15;
-
-    while pow > 0 && n & 0x8000 == 0 {
-        pow -= 1;
-        n <<= 1;
-    }
-
-    pow
+/// Get the highest exp x such that n > 2^x
+pub fn get_exp_u128(n: u128) -> u128 {
+    (0..128).rev().find(|i| 1 << i & n != 0).unwrap_or(0)
 }
 
 #[cfg(test)]
