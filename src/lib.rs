@@ -6,6 +6,7 @@ use std::{
 
 use utils::get_exp_u64;
 
+pub mod old_methods;
 mod utils;
 
 // Equal to 2^63
@@ -97,99 +98,47 @@ impl Add for BigNum {
             return max;
         }
 
-        let result: u128 = (max.base as u128) + ((min.base >> shift) as u128);
+        let result = max.base.wrapping_add(min.base >> shift);
 
-        if utils::get_exp_u128(result) >= 64 {
-            if max.exp == u64::MAX {
-                panic!("Attempt to add BigNum with overflow");
-            }
-            BigNum::new((result >> 1) as u64, 1 + max.exp)
+        if result < max.base {
+            // Wrap occurred, need to normalize value and exp
+            BigNum::new((result >> 1) + MIN_BASE_VAL, max.exp + 1)
         } else {
-            //(result as u64).into()
-            BigNum::new((result) as u64, max.exp)
+            // No wrap, easy
+            BigNum::new(result, max.exp)
         }
     }
 }
 
-pub fn add_old(lhs: BigNum, rhs: BigNum) -> BigNum {
-    if lhs.exp == 0 && rhs.exp == 0 {
-        // Both numbers are in compact form, first try normal addition
-        let result = lhs.base.wrapping_add(rhs.base);
-
-        // If remainder is less than either base, overflow occurred
-        if result < lhs.base || result < rhs.base {
-            BigNum::new(MIN_BASE_VAL + (result >> 1), 1)
-        } else {
-            BigNum::new(result, 0)
-        }
-    } else {
-        // At least one of the numbers is in expanded form, first find which is bigger
-        let (min, max) = if lhs > rhs { (rhs, lhs) } else { (lhs, rhs) };
-
-        // Calculate how much we need to shift the smaller number to align
-        let shift = if min.exp == 0 {
-            max.exp
-        } else {
-            max.get_full_exp() - min.get_full_exp()
-        };
-
-        if shift >= 64 || shift > min.get_full_exp() {
-            // Shifting will leave us with 0 so don't bother, return max
-            max
-        } else {
-            // Now we can add them, and handle any overflow
-            let res = max.base.wrapping_add(min.base >> shift);
-
-            // If result is less than either base, overflow occurred
-            if res < max.base {
-                // Wrapping occurred, need to fix things up
-                BigNum::new(MIN_BASE_VAL + (res >> 1), max.exp + 1)
-            } else {
-                BigNum::new(res, max.exp)
-            }
-        }
+fn new_sub(lhs: BigNum, rhs: BigNum) -> BigNum {
+    if rhs > lhs {
+        panic!("Attempt to subtract BigNum with underflow");
     }
-}
 
-pub fn add_new(lhs: BigNum, rhs: BigNum) -> BigNum {
-    let (max, min) = if lhs > rhs { (lhs, rhs) } else { (rhs, lhs) };
+    if rhs == lhs {
+        return BigNum::ZERO;
+    }
+
+    let (max, min) = (lhs, rhs);
     let shift = max.exp - min.exp;
 
     if shift >= 64 {
-        // minimum number is too small to make a difference in the sum
+        // minimum number is too small to make difference
         return max;
     }
 
-    let result: u128 = (max.base as u128) + ((min.base >> shift) as u128);
+    let result = max.base - (min.base >> shift);
+    // How far we would need to shift result left to get into correct format
+    // First term is how long self's base is, second is how long result is
+    let adj = get_exp_u64(max.base) - get_exp_u64(result);
 
-    if utils::get_exp_u128(result) >= 64 {
-        if max.exp == u64::MAX {
-            panic!("Attempt to add BigNum with overflow");
-        }
-        BigNum::new((result >> 1) as u64, 1 + max.exp)
+    if adj > max.exp {
+        // Result fits in compact form, need to normalize
+        // Imagine max = (MIN_BASE_VAL, 1) - (0x10, 0)
+        // adj = 1, shift should be 1. So we get adj - max.exp + 1
+        BigNum::new(result << (adj - max.exp - 1), 0)
     } else {
-        //(result as u64).into()
-        BigNum::new((result) as u64, max.exp)
-    }
-}
-
-pub fn add_newer(lhs: BigNum, rhs: BigNum) -> BigNum {
-    let (max, min) = if lhs > rhs { (lhs, rhs) } else { (rhs, lhs) };
-    let shift = max.exp - min.exp;
-
-    if shift >= 64 {
-        // minimum number is too small to make a difference in the sum
-        return max;
-    }
-
-    let res = max.base.wrapping_add(min.base >> shift);
-
-    if res < max.base {
-        // Wrap occurred, need to normalize value and exp
-        BigNum::new((res >> 1) + MIN_BASE_VAL, max.exp + 1)
-    } else {
-        // No wrap, easy
-        BigNum::new(res, max.exp)
+        BigNum::new(result << adj, max.exp - adj)
     }
 }
 
@@ -197,6 +146,7 @@ impl Sub for BigNum {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
+        return new_sub(self, rhs);
         if rhs > self {
             // We can't have negative numbers
             panic!("Attempt to subtract with overflow")
@@ -524,10 +474,7 @@ mod tests {
     };
 
     #[test]
-    fn it_works() {}
-
-    #[test]
-    fn new_add() {
+    fn add() {
         // A
         assert_eq!(A1 + A1, BigNum::ZERO);
 
@@ -551,68 +498,48 @@ mod tests {
     #[should_panic]
     #[test]
     fn add_panic() {
+        // Should panic when adding numbers that cause overflow
         let _ = C5 + C5;
     }
 
     #[test]
-    fn add() {
-        let a: BigNum = 1.into();
-        let b: BigNum = 1000000000001u64.into();
-
-        assert_eq!(a + b, 1000000000002u64.into());
-
-        let c: BigNum = u64::MAX.into();
-        assert_eq!(a + c, BigNum::new(0x8000_0000_0000_0000, 1));
-
-        let d = BigNum::new(0x8000_0000_0000_0000, 1);
-        let e: BigNum = 2.into();
-        let f: BigNum = 4.into();
-        assert_eq!(a + d, d);
-        assert_eq!(d + e, BigNum::new(0x8000_0000_0000_0001, 1));
-        assert_eq!(d + f, BigNum::new(0x8000_0000_0000_0002, 1));
-
-        let g = BigNum::new(0x8000_0000_0000_0000, 10000);
-        let h = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
-        assert_eq!(g + h, BigNum::new(0x8000_0000_0000_0001, 10000));
-
-        let i = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
-        let j = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
-        assert_eq!(i + j, BigNum::new(0x8000_0000_0000_0000, 10001));
-
-        let k = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
-        let l = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10000);
-        assert_eq!(k + l, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 10001));
-    }
-
-    #[test]
     fn sub() {
-        let a: BigNum = 1000000000001u64.into();
-        let b: BigNum = 1.into();
+        // A
+        assert_eq!(A1 - A1, BigNum::ZERO);
 
-        assert_eq!(a - b, 1000000000000u64.into());
+        // B - B = A
+        assert_eq!(B1 - B1, BigNum::ZERO);
+        assert_eq!(B2 - B2, BigNum::ZERO);
+        assert_eq!(B3 - B3, BigNum::ZERO);
 
-        let c: BigNum = 0x8000_0000_0000_0000u64.into();
-        assert_eq!(c - b, 0x7FFF_FFFF_FFFF_FFFFu64.into());
+        // B - B = B
+        assert_eq!(B2 - B1, BigNum::new(0x7FFF_FFFF_FFFF_FFFF, 0));
+        assert_eq!(B3 - B1, BigNum::new(0xFFFF_FFFF_FFFF_FFFE, 0));
+        assert_eq!(B3 - B2, BigNum::new(0x7FFF_FFFF_FFFF_FFFF, 0));
 
-        let d = BigNum::new(0x8000_0000_0000_0000, 1);
-        let e: BigNum = 2.into();
-        let f: BigNum = 4.into();
-        assert_eq!(d - b, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 0));
-        assert_eq!(d - e, BigNum::new(0xFFFF_FFFF_FFFF_FFFE, 0));
-        assert_eq!(d - f, BigNum::new(0xFFFF_FFFF_FFFF_FFFC, 0));
+        // C - C = A
+        assert_eq!(C1 - C1, BigNum::ZERO);
+        assert_eq!(C2 - C2, BigNum::ZERO);
+        assert_eq!(C3 - C3, BigNum::ZERO);
+        assert_eq!(C4 - C4, BigNum::ZERO);
+        assert_eq!(C5 - C5, BigNum::ZERO);
 
-        let g = BigNum::new(0x8000_0000_0000_0001, 10000);
-        let h = BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 9937);
-        assert_eq!(g - h, BigNum::new(0x8000_0000_0000_0000, 10000));
+        // C - B = B
+        assert_eq!(C1 - B2, BigNum::new(0xFFC0_0000_0000_0000, 9));
+        assert_eq!(C1 - B3, BigNum::new(0xFF80_0000_0000_0002, 9));
 
-        assert_eq!(a - a, 0u64.into());
-        assert_eq!(b - b, 0u64.into());
-        assert_eq!(c - c, 0u64.into());
-        assert_eq!(d - d, 0u64.into());
-        assert_eq!(e - e, 0u64.into());
-        assert_eq!(f - f, 0u64.into());
-        assert_eq!(g - g, 0u64.into());
-        assert_eq!(h - h, 0u64.into());
+        // C - A = C
+        assert_eq!(C1 - A1, C1);
+        assert_eq!(C2 - A1, C2);
+        assert_eq!(C3 - A1, C3);
+        assert_eq!(C4 - A1, C4);
+        assert_eq!(C5 - A1, C5);
+
+        // C - B = C
+        assert_eq!(C2 - B3, C2);
+        assert_eq!(C3 - B3, C3);
+        assert_eq!(C4 - B3, C4);
+        assert_eq!(C5 - B3, C5);
     }
 
     #[should_panic]
@@ -624,25 +551,14 @@ mod tests {
         let _ = a - b;
     }
 
-    //#[test]
-    //fn mul_u16() {
-    //    let a = 1u16;
-    //    let b = u16::MAX;
-    //    let c = BigNum::new(MIN_BASE_VAL, 1);
-    //
-    //    assert_eq!(c * a, c);
-    //    assert_eq!(c * b, BigNum::new(0xFFFF_0000_0000_0000, 16));
-    //
-    //    let d = BigNum::from(0x8000_1000_1000_1000u64);
-    //    let e = 2u16;
-    //    assert_eq!(d * e, BigNum::new(0x8000_1000_1000_1000, 1));
-    //
-    //    let f = 3u16;
-    //    assert_eq!(d * f, BigNum::new(0xC000_1800_1800_1800, 1));
-    //
-    //    let g = BigNum::new(0x8000_1000_1000_1000, 100);
-    //    assert_eq!(g * f, BigNum::new(0xC000_1800_1800_1800, 101));
-    //}
+    #[should_panic]
+    #[test]
+    fn sub_expanded_overflow() {
+        let a = BigNum::new(MIN_BASE_VAL, 10);
+        let b = BigNum::new(MIN_BASE_VAL + 1, 10);
+
+        let _ = a - b;
+    }
 
     #[test]
     fn mul_u64() {
