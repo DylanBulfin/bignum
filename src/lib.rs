@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    iter::Sum,
+    iter::{Product, Sum},
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
@@ -16,7 +16,7 @@ const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
 pub trait BigNumConvertable: Into<BigNum> {}
 
 /// Representation of large number. Formula is base * (2 ^ exp)
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct BigNum {
     base: u64,
     exp: u64,
@@ -63,76 +63,25 @@ impl BigNum {
     }
 }
 
-impl From<u64> for BigNum {
-    fn from(value: u64) -> Self {
-        BigNum::new(value, 0)
-    }
-}
-
-impl From<u32> for BigNum {
-    fn from(value: u32) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<u16> for BigNum {
-    fn from(value: u16) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<u8> for BigNum {
-    fn from(value: u8) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i64> for BigNum {
-    fn from(value: i64) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i32> for BigNum {
-    fn from(value: i32) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i16> for BigNum {
-    fn from(value: i16) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i8> for BigNum {
-    fn from(value: i8) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl BigNumConvertable for u64 {}
-impl BigNumConvertable for u32 {}
-impl BigNumConvertable for u16 {}
-impl BigNumConvertable for u8 {}
-impl BigNumConvertable for i64 {}
-impl BigNumConvertable for i32 {}
-impl BigNumConvertable for i16 {}
-impl BigNumConvertable for i8 {}
-
 impl PartialEq for BigNum {
     fn eq(&self, other: &Self) -> bool {
         self.base == other.base && self.exp == other.exp
     }
 }
 
-impl PartialOrd for BigNum {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self.exp.partial_cmp(&other.exp) {
-            Some(Ordering::Equal) => {}
+impl Ord for BigNum {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.exp.cmp(&other.exp) {
+            Ordering::Equal => (),
             ord => return ord,
         }
-        self.base.partial_cmp(&other.base)
+        self.base.cmp(&other.base)
+    }
+}
+
+impl PartialOrd for BigNum {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -140,43 +89,107 @@ impl Add for BigNum {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        if self.exp == 0 && rhs.exp == 0 {
-            // Both numbers are in compact form, first try normal addition
-            let result = self.base.wrapping_add(rhs.base);
+        let (max, min) = if self > rhs { (self, rhs) } else { (rhs, self) };
+        let shift = max.exp - min.exp;
 
-            // If remainder is less than either base, overflow occurred
-            if result < self.base || result < rhs.base {
-                Self::new(MIN_BASE_VAL + (result >> 1), 1)
-            } else {
-                Self::new(result, 0)
+        if shift >= 64 {
+            // minimum number is too small to make a difference in the sum
+            return max;
+        }
+
+        let result: u128 = (max.base as u128) + ((min.base >> shift) as u128);
+
+        if utils::get_exp_u128(result) >= 64 {
+            if max.exp == u64::MAX {
+                panic!("Attempt to add BigNum with overflow");
             }
+            BigNum::new((result >> 1) as u64, 1 + max.exp)
         } else {
-            // At least one of the numbers is in expanded form, first find which is bigger
-            let (min, max) = if self > rhs { (rhs, self) } else { (self, rhs) };
+            //(result as u64).into()
+            BigNum::new((result) as u64, max.exp)
+        }
+    }
+}
 
-            // Calculate how much we need to shift the smaller number to align
-            let shift = if min.exp == 0 {
-                max.exp
+pub fn add_old(lhs: BigNum, rhs: BigNum) -> BigNum {
+    if lhs.exp == 0 && rhs.exp == 0 {
+        // Both numbers are in compact form, first try normal addition
+        let result = lhs.base.wrapping_add(rhs.base);
+
+        // If remainder is less than either base, overflow occurred
+        if result < lhs.base || result < rhs.base {
+            BigNum::new(MIN_BASE_VAL + (result >> 1), 1)
+        } else {
+            BigNum::new(result, 0)
+        }
+    } else {
+        // At least one of the numbers is in expanded form, first find which is bigger
+        let (min, max) = if lhs > rhs { (rhs, lhs) } else { (lhs, rhs) };
+
+        // Calculate how much we need to shift the smaller number to align
+        let shift = if min.exp == 0 {
+            max.exp
+        } else {
+            max.get_full_exp() - min.get_full_exp()
+        };
+
+        if shift >= 64 || shift > min.get_full_exp() {
+            // Shifting will leave us with 0 so don't bother, return max
+            max
+        } else {
+            // Now we can add them, and handle any overflow
+            let res = max.base.wrapping_add(min.base >> shift);
+
+            // If result is less than either base, overflow occurred
+            if res < max.base {
+                // Wrapping occurred, need to fix things up
+                BigNum::new(MIN_BASE_VAL + (res >> 1), max.exp + 1)
             } else {
-                max.get_full_exp() - min.get_full_exp()
-            };
-
-            if shift >= 64 || shift > min.get_full_exp() {
-                // Shifting will leave us with 0 so don't bother, return max
-                max
-            } else {
-                // Now we can add them, and handle any overflow
-                let res = max.base.wrapping_add(min.base >> shift);
-
-                // If result is less than either base, overflow occurred
-                if res < max.base {
-                    // Wrapping occurred, need to fix things up
-                    Self::new(MIN_BASE_VAL + (res >> 1), max.exp + 1)
-                } else {
-                    Self::new(res, max.exp)
-                }
+                BigNum::new(res, max.exp)
             }
         }
+    }
+}
+
+pub fn add_new(lhs: BigNum, rhs: BigNum) -> BigNum {
+    let (max, min) = if lhs > rhs { (lhs, rhs) } else { (rhs, lhs) };
+    let shift = max.exp - min.exp;
+
+    if shift >= 64 {
+        // minimum number is too small to make a difference in the sum
+        return max;
+    }
+
+    let result: u128 = (max.base as u128) + ((min.base >> shift) as u128);
+
+    if utils::get_exp_u128(result) >= 64 {
+        if max.exp == u64::MAX {
+            panic!("Attempt to add BigNum with overflow");
+        }
+        BigNum::new((result >> 1) as u64, 1 + max.exp)
+    } else {
+        //(result as u64).into()
+        BigNum::new((result) as u64, max.exp)
+    }
+}
+
+pub fn add_newer(lhs: BigNum, rhs: BigNum) -> BigNum {
+    let (max, min) = if lhs > rhs { (lhs, rhs) } else { (rhs, lhs) };
+    let shift = max.exp - min.exp;
+
+    if shift >= 64 {
+        // minimum number is too small to make a difference in the sum
+        return max;
+    }
+
+    let res = max.base.wrapping_add(min.base >> shift);
+
+    if res < max.base {
+        // Wrap occurred, need to normalize value and exp
+        BigNum::new((res >> 1) + MIN_BASE_VAL, max.exp + 1)
+    } else {
+        // No wrap, easy
+        BigNum::new(res, max.exp)
     }
 }
 
@@ -226,12 +239,6 @@ impl Sub for BigNum {
                 }
             }
         }
-    }
-}
-
-impl Sum for BigNum {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(0.into(), |acc, x| acc + x)
     }
 }
 
@@ -298,6 +305,75 @@ impl Div for BigNum {
         }
     }
 }
+
+impl Sum for BigNum {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(BigNum::ZERO, |acc, x| acc + x)
+    }
+}
+
+impl Product for BigNum {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(BigNum::ONE, |acc, x| acc * x)
+    }
+}
+
+impl From<u64> for BigNum {
+    fn from(value: u64) -> Self {
+        BigNum::new(value, 0)
+    }
+}
+
+impl From<u32> for BigNum {
+    fn from(value: u32) -> Self {
+        BigNum::new(value as u64, 0)
+    }
+}
+
+impl From<u16> for BigNum {
+    fn from(value: u16) -> Self {
+        BigNum::new(value as u64, 0)
+    }
+}
+
+impl From<u8> for BigNum {
+    fn from(value: u8) -> Self {
+        BigNum::new(value as u64, 0)
+    }
+}
+
+impl From<i64> for BigNum {
+    fn from(value: i64) -> Self {
+        BigNum::new(value as u64, 0)
+    }
+}
+
+impl From<i32> for BigNum {
+    fn from(value: i32) -> Self {
+        BigNum::new(value as u64, 0)
+    }
+}
+
+impl From<i16> for BigNum {
+    fn from(value: i16) -> Self {
+        BigNum::new(value as u64, 0)
+    }
+}
+
+impl From<i8> for BigNum {
+    fn from(value: i8) -> Self {
+        BigNum::new(value as u64, 0)
+    }
+}
+
+impl BigNumConvertable for u64 {}
+impl BigNumConvertable for u32 {}
+impl BigNumConvertable for u16 {}
+impl BigNumConvertable for u8 {}
+impl BigNumConvertable for i64 {}
+impl BigNumConvertable for i32 {}
+impl BigNumConvertable for i16 {}
+impl BigNumConvertable for i8 {}
 
 impl<T> Add<T> for BigNum
 where
@@ -472,6 +548,7 @@ mod tests {
         assert_eq!(C1 + C3, C3);
     }
 
+    #[should_panic]
     #[test]
     fn add_panic() {
         let _ = C5 + C5;

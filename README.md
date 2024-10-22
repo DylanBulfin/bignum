@@ -57,25 +57,18 @@ For division use the following steps:
 - With similarities like this it's nice to abstract away some of the logic
 
 ## Efficiency Notes
-- Currently get_exp_u64 is pretty inefficient, does 64 comparisons
-    - Instead could do binary search via bitmasks (illustrated below with u16):
-        ```
-            if n & 0xff00 != 0 {
-                // target exp in top half of bits
-                if n & f000 != 0{
-                    // target exp in top quarter of bits
-                } else {
-                    ...
-                }
-            } else {
-                ...
-            }
-        ```
-    - Won't actually write it like this but that's the idea
-    - Consider: is it worth it?
-        - Try benchmarking with a hardcoded method (e.g. program in the test cases in a match statement)
-        - My guess is it's a pretty significant but not overwhelming part of performance, 
-    - Honestly could just hardcode array with each mask and go in sequence (or map it for fun)
+- Tested get_exp_u64 and it seems to account for only ~5% of runtime of addition and less for multiplication, so not refactoring for now
+- For addition tested the following ways:
+    - Initial implementation
+        - Fastest
+        - Spaghetti
+    - Lift to `u128` like multiplication
+        - Slowest
+        - A bit janky
+    - New clean version of initial implementation
+        - Slightly slower than original for some reason? 
+        - Best looking
+    - Using the third option for now
 
 ### Limitations
 Since we only store 64 bits of actual information higher numbers are inherently imprecise
