@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     iter::Sum,
-    ops::{Add, AddAssign, Div, Mul, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
 use utils::get_exp_u64;
@@ -10,25 +10,6 @@ mod utils;
 
 // Equal to 2^63
 const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
-// Powers of 2
-const VALID_DENOMS: [u64; 16] = [
-    1 << 0,
-    1 << 1,
-    1 << 2,
-    1 << 3,
-    1 << 4,
-    1 << 5,
-    1 << 6,
-    1 << 7,
-    1 << 8,
-    1 << 9,
-    1 << 10,
-    1 << 11,
-    1 << 12,
-    1 << 13,
-    1 << 14,
-    1 << 15,
-];
 
 /// Marker trait used for types that can be converted into BigNum
 /// This is used to allow for easy definition of methods like Add<T>
@@ -248,26 +229,6 @@ impl Sub for BigNum {
     }
 }
 
-pub struct Ratio {
-    numerator: u64,
-    denominator: u64,
-}
-
-impl Ratio {
-    pub fn new(numerator: u64, denominator: u64) -> Self {
-        if numerator == 0 && denominator != 1 {
-            panic!("Invalid Ratio: numerator is 0 but denominator is not 1")
-        }
-        if !VALID_DENOMS.contains(&denominator) {
-            panic!("Invalid Ratio: denominator is not a power of 2")
-        }
-        Ratio {
-            numerator,
-            denominator,
-        }
-    }
-}
-
 impl Sum for BigNum {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(0.into(), |acc, x| acc + x)
@@ -293,32 +254,20 @@ impl Mul for BigNum {
     }
 }
 
-impl Mul<u64> for BigNum {
-    type Output = Self;
-
-    fn mul(self, rhs: u64) -> Self::Output {
-        //let result: u128 = self.base as u128 * rhs as u128;
-        //let max_pow = utils::get_exp_u128(result) as u64;
-        //
-        //if max_pow < 64 {
-        //    // Result is compact
-        //    BigNum::new(result as u64, self.exp)
-        //} else {
-        //    // Result is expanded
-        //    let adj = max_pow - 63;
-        //
-        //    BigNum::new((result >> adj) as u64, self.exp + adj)
-        //}
-        self * BigNum::from(rhs)
-    }
-}
-
 impl Div for BigNum {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
         if rhs == BigNum::ZERO {
             panic!("Attempt to divide by zero")
+        }
+        if rhs > self {
+            // Division will result in 0
+            return BigNum::ZERO;
+        }
+        if rhs == self {
+            // Division will result in 1
+            return BigNum::ONE;
         }
 
         let lhs_n = (self.base as u128) << 64;
@@ -331,71 +280,21 @@ impl Div for BigNum {
             // Since self is in expanded form, when dividing by 1 we expect result's max_pow
             // to be 127 (64 + 63), if not we adjust self.exp (or base if res is compact)
             let adj = 127 - max_pow;
+            // Since you normally adjust by 64, shift is 64 with adjustment
+            let shift = 64 - adj;
 
-            if adj > self.exp {
+            if adj >= self.exp {
                 // Result can be made compact
                 // If we want to adjust by 3 but self.exp is 1, we subtract 1 from adj
                 // and then shift result by 2 (3 - 1)
                 BigNum::new((result >> (64 - self.exp + rhs.exp)) as u64, 0)
             } else {
                 // Result is expanded
-                BigNum::new((result >> (64 - adj)) as u64, self.exp - rhs.exp - adj)
+                BigNum::new((result >> shift) as u64, self.exp - rhs.exp - adj)
             }
         } else {
             // self is compact so result must be compact
             BigNum::new((result >> 64) as u64, 0)
-        }
-    }
-}
-
-impl Div<u64> for BigNum {
-    type Output = Self;
-
-    fn div(self, rhs: u64) -> Self::Output {
-        //if rhs == 0 {
-        //    panic!("Attempt to divide by zero")
-        //}
-        //
-        //let lhs = (self.base as u128) << 64;
-        //let rhs = rhs as u128;
-        //
-        //let result = lhs / rhs;
-        //let max_pow = utils::get_exp_u128(result) as u64;
-        //
-        //if self.exp != 0 {
-        //    // Since self is in expanded form, when dividing by 1 we expect result's max_pow
-        //    // to be 127 (64 + 63), if not we adjust self.exp (or base if res is compact)
-        //    let adj = 127 - max_pow;
-        //
-        //    if adj > self.exp {
-        //        // Result can be made compact
-        //        // If we want to adjust by 3 but self.exp is 1, we subtract 1 from adj
-        //        // and then shift result by 2 (3 - 1)
-        //        BigNum::new((result >> (64 - self.exp)) as u64, 0)
-        //    } else {
-        //        // Result is expanded
-        //        BigNum::new((result >> (64 - adj)) as u64, self.exp - adj)
-        //    }
-        //} else {
-        //    // self is compact so result must be compact
-        //    BigNum::new((result >> 64) as u64, 0)
-        //}
-        //
-        self / BigNum::from(rhs)
-    }
-}
-
-impl Mul<Ratio> for BigNum {
-    type Output = Self;
-
-    fn mul(self, rhs: Ratio) -> Self::Output {
-        let res = self * rhs.numerator;
-
-        if res.exp != 0 {
-            // Already in expanded form
-            unimplemented!()
-        } else {
-            unimplemented!()
         }
     }
 }
@@ -452,12 +351,131 @@ where
     }
 }
 
+impl<T> Mul<T> for BigNum
+where
+    T: BigNumConvertable,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        self * rhs.into()
+    }
+}
+
+impl MulAssign for BigNum {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
+impl<T> MulAssign<T> for BigNum
+where
+    T: BigNumConvertable,
+{
+    fn mul_assign(&mut self, rhs: T) {
+        *self = *self * rhs.into();
+    }
+}
+
+impl<T> Div<T> for BigNum
+where
+    T: BigNumConvertable,
+{
+    type Output = Self;
+
+    fn div(self, rhs: T) -> Self::Output {
+        self / rhs.into()
+    }
+}
+
+impl DivAssign for BigNum {
+    fn div_assign(&mut self, rhs: Self) {
+        *self = *self / rhs;
+    }
+}
+
+impl<T> DivAssign<T> for BigNum
+where
+    T: BigNumConvertable,
+{
+    fn div_assign(&mut self, rhs: T) {
+        *self = *self / rhs.into();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const A1: BigNum = BigNum::ZERO;
+
+    const B1: BigNum = BigNum::ONE;
+    const B2: BigNum = BigNum {
+        base: 0x8000_0000_0000_0000,
+        exp: 0,
+        invalidate: false,
+    };
+    const B3: BigNum = BigNum {
+        base: 0xFFFF_FFFF_FFFF_FFFF,
+        exp: 0,
+        invalidate: false,
+    };
+
+    const C1: BigNum = BigNum {
+        base: 0x8000_0000_0000_0000,
+        exp: 10,
+        invalidate: false,
+    };
+    const C2: BigNum = BigNum {
+        base: 0x8000_0000_0000_0000,
+        exp: 73,
+        invalidate: false,
+    };
+    const C3: BigNum = BigNum {
+        base: 0xFFFF_FFFF_FFFF_FFFF,
+        exp: 120,
+        invalidate: false,
+    };
+    const C4: BigNum = BigNum {
+        base: 0xFFFF_FFFF_FFFF_FFFF,
+        exp: 127000,
+        invalidate: false,
+    };
+    const C5: BigNum = BigNum {
+        base: u64::MAX,
+        exp: u64::MAX,
+        invalidate: false,
+    };
+
     #[test]
     fn it_works() {}
+
+    #[test]
+    fn new_add() {
+        // A
+        assert_eq!(A1 + A1, BigNum::ZERO);
+
+        // A + B -> B
+        assert_eq!(A1 + B1, BigNum::ONE);
+
+        // B
+        assert_eq!(B1 + B2, BigNum::new(0x8000_0000_0000_0001, 0));
+
+        // B + B -> C
+        assert_eq!(B1 + B3, BigNum::new(0x8000_0000_0000_0000, 1));
+        assert_eq!(B2 + B3, BigNum::new(0xBFFF_FFFF_FFFF_FFFF, 1));
+
+        // C
+        assert_eq!(C1 + C2, BigNum::new(0x8000_0000_0000_0001, 73));
+        assert_eq!(C2 + C3, BigNum::new(0x8000_0000_0000_7FFF, 121));
+        assert_eq!(C3 + C4, C4); // Too small to make a difference
+        assert_eq!(C1 + C3, C3);
+    }
+
+    #[test]
+    fn add_panic() {
+        let _ = C5 + C5;
+    }
 
     #[test]
     fn add() {
@@ -552,7 +570,7 @@ mod tests {
     #[test]
     fn mul_u64() {
         let a = 1u64;
-        let b = u64::MAX;
+        let b = 0xFFFF_FFFF_FFFF_FFFFu64;
         let c = BigNum::new(MIN_BASE_VAL, 1);
 
         assert_eq!(c * a, c);
@@ -587,5 +605,24 @@ mod tests {
         let f = BigNum::new(10_000_000_000_000_000_000u64, 1);
         let g = 5u64;
         assert_eq!(f / g, BigNum::from(4_000_000_000_000_000_000u64));
+
+        let h = BigNum::new(MIN_BASE_VAL, 10000);
+        let i = BigNum::new(MIN_BASE_VAL, 9937);
+        let j = BigNum::new(MIN_BASE_VAL, 9936);
+        assert_eq!(h / i, BigNum::new(MIN_BASE_VAL, 0));
+        assert_eq!(h / j, BigNum::new(MIN_BASE_VAL, 1));
+
+        assert_eq!(c / c, BigNum::ONE);
+        assert_eq!(d / d, BigNum::ONE);
+        assert_eq!(f / f, BigNum::ONE);
+        assert_eq!(h / h, BigNum::ONE);
+        assert_eq!(i / i, BigNum::ONE);
+        assert_eq!(j / j, BigNum::ONE);
+    }
+
+    #[should_panic]
+    #[test]
+    fn div_zero() {
+        let _ = BigNum::ONE / BigNum::ZERO;
     }
 }

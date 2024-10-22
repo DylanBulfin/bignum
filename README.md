@@ -35,6 +35,48 @@ For division use the following steps:
 - lift rhs to bottom half of u128 by `rhs as u128`
 - Normalize the result 
 
+## Testing Notes
+- Want to be reasonably sure everything works so I don't have to touch this ever again
+- Unit tests should cover all important edge cases
+- Let's define 3 'regions' of the `BigNum` space
+    - Region A: `n = 0`
+    - Region B: `1 <= n < 2^64`
+    - Region C: `n >= 2^64`
+- Biggest boundaries in input space:
+    - A -> B
+    - B -> C
+    - C -> overflow
+    - underflow -> A
+- Each unit test should test the functionality on each boundary, and within each region
+- Example test cases for Add, start letter is each number's region
+    - `a1 + b1 = b2` `A -> B`
+    - `b1 + b2 = c1` `B -> C`
+    - `b1 + c1 = c2` `B -> C`
+    - `c1 + c2 = overflow`
+- Subtract is the same but with reversed boundaries and underflow instead of overflow
+- With similarities like this it's nice to abstract away some of the logic
+
+## Efficiency Notes
+- Currently get_exp_u64 is pretty inefficient, does 64 comparisons
+    - Instead could do binary search via bitmasks (illustrated below with u16):
+        ```
+            if n & 0xff00 != 0 {
+                // target exp in top half of bits
+                if n & f000 != 0{
+                    // target exp in top quarter of bits
+                } else {
+                    ...
+                }
+            } else {
+                ...
+            }
+        ```
+    - Won't actually write it like this but that's the idea
+    - Consider: is it worth it?
+        - Try benchmarking with a hardcoded method (e.g. program in the test cases in a match statement)
+        - My guess is it's a pretty significant but not overwhelming part of performance, 
+    - Honestly could just hardcode array with each mask and go in sequence (or map it for fun)
+
 ### Limitations
 Since we only store 64 bits of actual information higher numbers are inherently imprecise
 Edge cases:
@@ -51,5 +93,7 @@ Edge cases:
         - This handles the specific edge case `2^64 - 1` or similar
             - This result is fully representable as `u64::MAX (0xFFFF_FFFF_FFFF_FFFF)`
             - So we handle it specially
+- As of now panics when you do anything with a number with `exp > (u64::MAX - 63)`
+    - It does this because it needs to get the "full exponent" e.g. `63 + exp` since the significand holds up to `2^63`
 
 
