@@ -708,7 +708,7 @@ mod tests {
         let _ = BigNum::ONE / BigNum::ZERO;
     }
 
-    fn test_rand(iterations: usize, confidence_low: usize, confidence_high: usize) {
+    fn test_rand(iterations: usize, confidence_width: usize, exp_confidence_width: usize) {
         // I'm deliberately using occasionally-failing tests here to test the distribution, if this
         // test fails it will probably work by re-running it
         let full_rand = Uniform::new(BigNum::ZERO, BigNum::MAX);
@@ -717,6 +717,10 @@ mod tests {
         // Holds number of samples that were in the range [1,100) for each sampler
         let mut full_count = 0;
         let mut small_count = 0;
+
+        // The number of times the sample from the full range has exp >2^63 (e.g. top half of input
+        // space)
+        let mut exp_count = 0;
 
         for _ in 0..iterations {
             let full_samp = full_rand.sample(&mut thread_rng());
@@ -728,32 +732,43 @@ mod tests {
             if small_samp >= BigNum::from(10) && small_samp <= BigNum::from(100) {
                 small_count += 1;
             }
+            if full_samp >= BigNum::new(MIN_BASE_VAL, 1 << 63) {
+                exp_count += 1;
+            }
         }
 
-        // The likelihood of getting a single value in this range is astronomical, something around 1 / 2^(57 + 64 - 20).
-        // This means that getting 2 or more is either a once-in-a-lifetime event, an issue with
+        // The likelihood of getting a single value in this range is astronomical, something around 1 / 2^(57 + 64 - log2(iterations)).
+        // This means that getting 2 or more, regardless of iteration count, is either a once-in-a-lifetime event, an issue with
         // the rng generator, or an issue with the sampling algorithm I wrote
         assert!(full_count < 2);
 
-        // This range covers ~10% of the range of samples, so we'd be very suprised to see anything
-        // outside of 5,000 to 15,000 instances
+        // These intervals should be fairly forgiving
+        let (confidence_low, confidence_high) = (
+            (iterations / 10) - confidence_width,
+            (iterations / 10) + confidence_width,
+        );
         assert!(small_count > confidence_low);
         assert!(small_count < confidence_high);
+
+        let (exp_confidence_low, exp_confidence_high) = (
+            (iterations / 2) - exp_confidence_width,
+            (iterations / 2) + exp_confidence_width,
+        );
+        assert!(exp_count > exp_confidence_low);
+        assert!(exp_count < exp_confidence_high);
     }
 
     #[test]
     fn rand_short() {
-        // For 100_000 iterations (5,000, 15,000) is an extremely generous confidence interval
         // May fail once, always re-run (unlikely but possible)
-        test_rand(100000, 5000, 15000)
+        test_rand(100000, 5000, 1000)
     }
 
     #[ignore]
     #[test]
     fn rand_full() {
-        // Another very generous interval.
         // Fairly slow to run, but completed in <1m on my computer
         // May fail once, always re-run (unlikely but possible)
-        test_rand(10_000_000, 900_000, 1_100_000)
+        test_rand(10_000_000, 100_000, 10_000)
     }
 }
