@@ -2,6 +2,7 @@ use std::{
     cmp::Ordering,
     iter::{Product, Sum},
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
+    u64,
 };
 
 use utils::get_exp_u64;
@@ -16,7 +17,24 @@ const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
 /// This is used to allow for easy definition of methods like Add<T>
 pub trait BigNumConvertable: Into<BigNum> {}
 
-/// Representation of large number. Formula is base * (2 ^ exp)
+/// Representation of large number. Formula to get true value is base * 2^exp
+///
+/// You should probably use BigNum::from(n) or n.into() instead of manually constructing this
+///
+/// # Examples
+/// ```
+/// use bignum::BigNum;
+///
+/// let a = BigNum::from(0x10000u64); // 2^16
+/// let b = BigNum::from(0xFFFF_FFFF_FFFF_FFFFu64);
+/// let c = a * b;
+/// let d = c / BigNum::from(2);
+/// let e = (a - a) + (b - b) + (c - c) + (d - d);
+///
+/// assert_eq!(c, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 16));
+/// assert_eq!(d, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 15));
+/// assert_eq!(e, BigNum::ZERO);
+/// ```
 #[derive(Debug, Clone, Copy, Eq)]
 pub struct BigNum {
     base: u64,
@@ -26,17 +44,25 @@ pub struct BigNum {
 }
 
 impl BigNum {
-    pub const ZERO: BigNum = BigNum {
+    pub const ZERO: Self = Self {
         base: 0,
         exp: 0,
         invalidate: true,
     };
 
-    pub const ONE: BigNum = BigNum {
+    pub const ONE: Self = Self {
         base: 1,
         exp: 0,
         invalidate: true,
     };
+
+    pub const MAX: Self = Self {
+        base: u64::MAX,
+        exp: u64::MAX,
+        invalidate: true,
+    };
+
+    pub const MIN: Self = Self::ZERO;
 
     /// Create a BigNum instance directly (e.g. not through the From trait)
     pub fn new(base: u64, exp: u64) -> Self {
@@ -46,7 +72,7 @@ impl BigNum {
         if base < MIN_BASE_VAL && exp != 0 {
             panic!("Invalid BigNum: exp is {} but base is {:#x}", exp, base)
         }
-        BigNum {
+        Self {
             base,
             exp,
             invalidate: false,
@@ -545,19 +571,13 @@ mod tests {
     #[should_panic]
     #[test]
     fn sub_overflow() {
-        let a: BigNum = 1.into();
-        let b: BigNum = 2.into();
-
-        let _ = a - b;
+        let _ = A1 - B1;
     }
 
     #[should_panic]
     #[test]
     fn sub_expanded_overflow() {
-        let a = BigNum::new(MIN_BASE_VAL, 10);
-        let b = BigNum::new(MIN_BASE_VAL + 1, 10);
-
-        let _ = a - b;
+        let _ = C1 - C2;
     }
 
     #[test]
