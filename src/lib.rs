@@ -5,6 +5,7 @@ use std::{
     u64,
 };
 
+use rand::distributions::uniform::{SampleBorrow, SampleUniform, UniformInt, UniformSampler};
 use utils::get_exp_u64;
 
 pub mod old_methods;
@@ -112,6 +113,118 @@ impl PartialOrd for BigNum {
     }
 }
 
+/// Struct that implements uniform random generation for BigNum
+///
+/// Not uniform in the integer sense. This is because we generate a random u64 for the exp and then
+/// a base (and then validate). E.g. it is basically just as likely to generate a number between
+/// 2^10000000000 and 2^10000000100 as it is to generate numbers between 0 and 2^100 (~10^30)
+///
+/// This means it is almost certainly only useful for testing
+pub struct UniformBigNum {
+    low: BigNum,
+    high: BigNum,
+    inclusive: bool,
+}
+
+impl UniformSampler for UniformBigNum {
+    type X = BigNum;
+
+    fn new<B1, B2>(low: B1, high: B2) -> Self
+    where
+        B1: SampleBorrow<Self::X> + Sized,
+        B2: SampleBorrow<Self::X> + Sized,
+    {
+        let (&low, &high) = (low.borrow(), high.borrow());
+        assert!(high > low);
+
+        UniformBigNum {
+            low,
+            high,
+            inclusive: false,
+        }
+    }
+
+    fn new_inclusive<B1, B2>(low: B1, high: B2) -> Self
+    where
+        B1: SampleBorrow<Self::X> + Sized,
+        B2: SampleBorrow<Self::X> + Sized,
+    {
+        let (&low, &high) = (low.borrow(), high.borrow());
+        assert!(high > low);
+
+        UniformBigNum {
+            low,
+            high,
+            inclusive: true,
+        }
+    }
+
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> Self::X {
+        // Exponent should be inclusive even when self isn't since you can have two numbers with
+        // equal exp but are different. You need non-inclusive only when high.base is MIN_BASE_VAL,
+        // self is not inclusive, and high.exp is non-zero. This is because there is no valid
+        // number with exp > 0 where base < MIN_BASE_VAL
+        let exp_samp: UniformInt<u64> =
+            if !self.inclusive && self.high.exp != 0 && self.high.base == MIN_BASE_VAL {
+                UniformInt::new(self.low.exp, self.high.exp)
+            } else {
+                UniformInt::new_inclusive(self.low.exp, self.high.exp)
+            };
+
+        // Is this too gross
+        let (low_base, high_base) = (
+            self.low.base.min(self.high.base),
+            self.low.base.max(self.high.base),
+        );
+
+        let base_samp: UniformInt<u64> = if self.inclusive {
+            UniformInt::new_inclusive(low_base, high_base)
+        } else {
+            UniformInt::new(low_base, high_base)
+        };
+
+        let valid_base_samp: UniformInt<u64> = if self.inclusive && high_base >= MIN_BASE_VAL {
+            UniformInt::new_inclusive(low_base.max(MIN_BASE_VAL), high_base)
+        } else if high_base > MIN_BASE_VAL {
+            UniformInt::new(low_base.max(MIN_BASE_VAL), high_base)
+        } else {
+            base_samp
+        };
+
+        let mut generate = || {
+            let exp_sample = exp_samp.sample(rng);
+            let base_sample = base_samp.sample(rng);
+            let valid_base_sample = valid_base_samp.sample(rng);
+
+            // When I get an invalid base I chose to handle it by shifting it. This skews results
+            // towards numbers with 0s at the end. In a way the number of trailing zeroes is
+            // almost uniformly distributed
+            //
+            // TODO Change this, probably create an alternative sampler that has a low of
+            // BASE_MIN_VAL
+            //
+            // ABOVE IS OUTDATED, LEFT FOR LATER REFERENCE
+
+            if exp_sample == 0 {
+                BigNum::new(base_sample, exp_sample)
+            } else {
+                BigNum::new(valid_base_sample, exp_sample)
+            }
+        };
+        let mut sample = generate();
+
+        while sample < self.low || sample > self.high || (sample == self.high && !self.inclusive) {
+            sample = generate();
+        }
+
+        sample
+    }
+}
+
+impl SampleUniform for BigNum {
+    type Sampler = UniformBigNum;
+}
+
 impl Add for BigNum {
     type Output = Self;
 
@@ -136,84 +249,38 @@ impl Add for BigNum {
     }
 }
 
-fn new_sub(lhs: BigNum, rhs: BigNum) -> BigNum {
-    if rhs > lhs {
-        panic!("Attempt to subtract BigNum with underflow");
-    }
-
-    if rhs == lhs {
-        return BigNum::ZERO;
-    }
-
-    let (max, min) = (lhs, rhs);
-    let shift = max.exp - min.exp;
-
-    if shift >= 64 {
-        // minimum number is too small to make difference
-        return max;
-    }
-
-    let result = max.base - (min.base >> shift);
-    // How far we would need to shift result left to get into correct format
-    // First term is how long self's base is, second is how long result is
-    let adj = get_exp_u64(max.base) - get_exp_u64(result);
-
-    if adj > max.exp {
-        // Result fits in compact form, need to normalize
-        // Imagine max = (MIN_BASE_VAL, 1) - (0x10, 0)
-        // adj = 1, shift should be 1. So we get adj - max.exp + 1
-        BigNum::new(result << (adj - max.exp - 1), 0)
-    } else {
-        BigNum::new(result << adj, max.exp - adj)
-    }
-}
-
 impl Sub for BigNum {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        return new_sub(self, rhs);
         if rhs > self {
-            // We can't have negative numbers
-            panic!("Attempt to subtract with overflow")
+            panic!("Attempt to subtract BigNum with underflow");
         }
 
-        if rhs.exp == 0 && self.exp == 0 {
-            // Both are in compact form, and since self > rhs we know we won't underflow
-            Self::new(self.base - rhs.base, 0)
+        if rhs == self {
+            return Self::ZERO;
+        }
+
+        let (max, min) = (self, rhs);
+        let shift = max.exp - min.exp;
+
+        if shift >= 64 {
+            // minimum number is too small to make difference
+            return max;
+        }
+
+        let result = max.base - (min.base >> shift);
+        // How far we would need to shift result left to get into correct format
+        // First term is how long self's base is, second is how long result is
+        let adj = get_exp_u64(max.base) - get_exp_u64(result);
+
+        if adj > max.exp {
+            // Result fits in compact form, need to normalize
+            // Imagine max = (MIN_BASE_VAL, 1) - (0x10, 0)
+            // adj = 1, shift should be 1. So we get adj - max.exp + 1
+            Self::new(result << (adj - max.exp - 1), 0)
         } else {
-            // Find how much we need to shift the smaller number to align
-            let shift = if rhs.exp == 0 {
-                self.exp
-            } else {
-                self.get_full_exp() - rhs.get_full_exp()
-            };
-
-            if shift >= 64 || shift > rhs.get_full_exp() {
-                if self.base == MIN_BASE_VAL && (shift == 64 || shift == rhs.get_full_exp() + 1) {
-                    // Base is at the minimum value so we need to handle edge case
-                    // E.g. BigNum::new(0x8000_0000_0000_0000, 1) - BigNum::from(1)
-                    // shift = 1, get_full_exp = 0, so normally we would skip
-                    // But since base is at min value we need to decrease exp and normalize
-                    BigNum::new(u64::MAX, self.exp - 1)
-                } else {
-                    // Shifting will leave us with 0 so don't bother, return self
-                    self
-                }
-            } else {
-                let res = self.base - (rhs.base >> shift);
-
-                // We know that underflow won't happen, but if numbers are equal
-                // we need to handle 0 case
-                if res == 0 {
-                    Self::new(0, 0)
-                } else {
-                    // If new resulting base is not in range we need to fix
-                    let adjustment = 63 - get_exp_u64(res);
-
-                    Self::new(res << adjustment, self.exp - adjustment)
-                }
-            }
+            Self::new(result << adj, max.exp - adj)
         }
     }
 }
@@ -242,7 +309,7 @@ impl Div for BigNum {
 
     fn div(self, rhs: Self) -> Self::Output {
         if rhs == BigNum::ZERO {
-            panic!("Attempt to divide by zero")
+            panic!("Attempt to divide BigNum by zero")
         }
         if rhs > self {
             // Division will result in 0
@@ -457,6 +524,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use rand::{distributions::Uniform, prelude::Distribution, thread_rng};
+
     use super::*;
 
     const A1: BigNum = BigNum::ZERO;
@@ -637,5 +706,54 @@ mod tests {
     #[test]
     fn div_zero() {
         let _ = BigNum::ONE / BigNum::ZERO;
+    }
+
+    fn test_rand(iterations: usize, confidence_low: usize, confidence_high: usize) {
+        // I'm deliberately using occasionally-failing tests here to test the distribution, if this
+        // test fails it will probably work by re-running it
+        let full_rand = Uniform::new(BigNum::ZERO, BigNum::MAX);
+        let small_rand = Uniform::new_inclusive(BigNum::ONE, BigNum::from(1000));
+
+        // Holds number of samples that were in the range [1,100) for each sampler
+        let mut full_count = 0;
+        let mut small_count = 0;
+
+        for _ in 0..iterations {
+            let full_samp = full_rand.sample(&mut thread_rng());
+            let small_samp = small_rand.sample(&mut thread_rng());
+
+            if full_samp >= BigNum::from(10) && full_samp <= BigNum::from(100) {
+                full_count += 1;
+            }
+            if small_samp >= BigNum::from(10) && small_samp <= BigNum::from(100) {
+                small_count += 1;
+            }
+        }
+
+        // The likelihood of getting a single value in this range is astronomical, something around 1 / 2^(57 + 64 - 20).
+        // This means that getting 2 or more is either a once-in-a-lifetime event, an issue with
+        // the rng generator, or an issue with the sampling algorithm I wrote
+        assert!(full_count < 2);
+
+        // This range covers ~10% of the range of samples, so we'd be very suprised to see anything
+        // outside of 5,000 to 15,000 instances
+        assert!(small_count > confidence_low);
+        assert!(small_count < confidence_high);
+    }
+
+    #[test]
+    fn rand_short() {
+        // For 100_000 iterations (5,000, 15,000) is an extremely generous confidence interval
+        // May fail once, always re-run (unlikely but possible)
+        test_rand(100000, 5000, 15000)
+    }
+
+    #[ignore]
+    #[test]
+    fn rand_full() {
+        // Another very generous interval.
+        // Fairly slow to run, but completed in <1m on my computer
+        // May fail once, always re-run (unlikely but possible)
+        test_rand(10_000_000, 900_000, 1_100_000)
     }
 }
