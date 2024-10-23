@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     iter::{Product, Sum},
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Shl, Shr, Sub, SubAssign},
     u64,
 };
 
@@ -559,6 +559,106 @@ pub trait MinMax: Sized {
     }
 }
 
+// Technically possible to have valid shift outside of u64 range
+// TODO implement this
+impl Shl<u128> for BigNum {
+    type Output = Self;
+
+    fn shl(self, rhs: u128) -> Self::Output {
+        unimplemented!()
+    }
+}
+
+impl Shr<u64> for BigNum {
+    type Output = Self;
+
+    fn shr(self, rhs: u64) -> Self::Output {
+        if self.exp == 0 {
+            if rhs > get_exp_u64(self.base) {
+                panic!("Attempt to right shift BigNum with overflow")
+            } else {
+                Self::new(self.base >> rhs, self.exp)
+            }
+        } else if self.exp >= rhs {
+            Self::new(self.base, self.exp - rhs)
+        } else {
+            let full_pow = self.exp.wrapping_add(63);
+
+            if full_pow >= 63 && full_pow >= rhs {
+                Self::new(self.base >> (full_pow - rhs), 0)
+            } else if full_pow < 63 {
+                // Overflow occurred, meaning full_pow >= u64::MAX, e.g. this is guaranteed to be
+                // a valid shift
+                Self::new(self.base >> (rhs - self.exp), 0)
+            } else {
+                // No overflow, and rhs > full_pow, so we panic
+                panic!("Attempt to right shift BigNum with overflow")
+            }
+        }
+    }
+}
+
+impl Shl<u64> for BigNum {
+    type Output = Self;
+
+    fn shl(self, rhs: u64) -> Self::Output {
+        if self.exp == 0 {
+            // Guaranteed not to overflow since it has at least 2^64 of wiggle room
+            let adj = 63 - get_exp_u64(self.base);
+
+            if adj > rhs {
+                Self::new(self.base << rhs, 0)
+            } else {
+                Self::new(self.base << adj, rhs - adj)
+            }
+        } else if rhs <= u64::MAX - self.exp {
+            // There is enough room for growth in the exponent
+            Self::new(self.base, self.exp + rhs)
+        } else {
+            // There is not enough room for growth, panic
+            panic!("Attempt to left shift BigNum with overflow")
+        }
+    }
+}
+
+/// Struct holding a custom ratio object, for more efficient but less flexible multiplication/division
+pub struct Ratio {
+    numerator: u16,
+    denominator: u16,
+}
+
+impl Ratio {
+    pub fn new(numerator: u16, denominator: u16) -> Self {
+        if denominator.count_ones() != 1 {
+            // Denominator is not a power of 2, panic
+            panic!("Ratio does not support a denominator of {}", denominator);
+        }
+        if numerator == 0 && denominator != 1 {
+            // To avoid having multiple equivalent Ratios we ensure that (0, 1) is the only valid
+            // reprensentation of 0
+            panic!(
+                "Ration does not support a denominator of {} with a 0 numerator",
+                denominator
+            );
+        }
+
+        Self {
+            numerator,
+            denominator,
+        }
+    }
+}
+
+impl Mul<Ratio> for BigNum {
+    type Output = BigNum;
+
+    fn mul(self, rhs: Ratio) -> Self::Output {
+        // Need to consider whether we should multiply or divide first
+        // For now we do multiplication first
+        (self * rhs.numerator) >> get_exp_u64(rhs.denominator as u64)
+    }
+}
+
 impl<T, I> MinMax for I
 where
     I: Iterator<Item = T>,
@@ -931,5 +1031,10 @@ mod tests {
     fn minimum_by_empty_panic() {
         let empty: Vec<u64> = Vec::new();
         let _ = empty.iter().minimum_by(&mut |_, _| Ordering::Greater);
+    }
+
+    #[test]
+    fn shift_test() {
+
     }
 }
