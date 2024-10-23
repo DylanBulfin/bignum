@@ -513,10 +513,14 @@ where
     }
 }
 
-pub trait Maximum: Sized {
+pub trait MinMax: Sized {
     type Output: Ord;
 
     fn maximum_by_checked<F>(self, f: &mut F) -> Option<Self::Output>
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering;
+
+    fn minimum_by_checked<F>(self, f: &mut F) -> Option<Self::Output>
     where
         F: FnMut(Self::Output, Self::Output) -> Ordering;
 
@@ -536,9 +540,26 @@ pub trait Maximum: Sized {
         self.maximum_checked()
             .expect("Failed to find maximum value")
     }
+
+    fn minimum_checked(self) -> Option<Self::Output> {
+        self.minimum_by_checked(&mut |a, b| a.cmp(&b))
+    }
+
+    fn minimum_by<F>(self, f: &mut F) -> Self::Output
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering,
+    {
+        self.minimum_by_checked(f)
+            .expect("Failed to find minimum value")
+    }
+
+    fn minimum(self) -> Self::Output {
+        self.minimum_checked()
+            .expect("Failed to find minimum value")
+    }
 }
 
-impl<T, I> Maximum for I
+impl<T, I> MinMax for I
 where
     I: Iterator<Item = T>,
     T: Ord + Copy,
@@ -554,6 +575,20 @@ where
                 start,
                 |acc, x| if f(acc, x) == Ordering::Less { x } else { acc },
             )
+        })
+    }
+    fn minimum_by_checked<F>(mut self, f: &mut F) -> Option<Self::Output>
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering,
+    {
+        self.next().map(|start| {
+            self.fold(start, |acc, x| {
+                if f(acc, x) == Ordering::Greater {
+                    x
+                } else {
+                    acc
+                }
+            })
         })
     }
 }
@@ -809,7 +844,7 @@ mod tests {
     }
 
     #[test]
-    fn test_max_trait() {
+    fn test_min_max_trait() {
         let elems = Vec::from([A1, B1, B2, B3, C1, C2, C3, C4, C5]);
         let empty: Vec<u64> = Vec::new();
 
@@ -821,6 +856,15 @@ mod tests {
                 _ => Ordering::Equal,
             }),
             A1
+        );
+        assert_eq!(*elems.iter().minimum(), A1);
+        assert_eq!(
+            *elems.iter().minimum_by(&mut |a, b| match a.cmp(b) {
+                Ordering::Less => Ordering::Greater,
+                Ordering::Greater => Ordering::Less,
+                _ => Ordering::Equal,
+            }),
+            C5
         );
 
         assert_eq!(elems.iter().maximum_checked().copied(), Some(C5));
@@ -835,6 +879,18 @@ mod tests {
                 .copied(),
             Some(A1)
         );
+        assert_eq!(elems.iter().minimum_checked().copied(), Some(A1));
+        assert_eq!(
+            elems
+                .iter()
+                .minimum_by_checked(&mut |a, b| match a.cmp(b) {
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => Ordering::Less,
+                    _ => Ordering::Equal,
+                })
+                .copied(),
+            Some(C5)
+        );
 
         assert_eq!(empty.iter().maximum_checked(), None);
         assert_eq!(
@@ -843,21 +899,37 @@ mod tests {
                 .maximum_by_checked(&mut |_, _| Ordering::Greater),
             None
         );
+        assert_eq!(empty.iter().minimum_checked(), None);
+        assert_eq!(
+            empty
+                .iter()
+                .minimum_by_checked(&mut |_, _| Ordering::Greater),
+            None
+        );
     }
 
     #[should_panic(expected = "Failed to find maximum value")]
     #[test]
     fn maximum_empty_panic() {
         let empty: Vec<u64> = Vec::new();
-
         let _ = empty.iter().maximum();
     }
-
     #[should_panic(expected = "Failed to find maximum value")]
     #[test]
     fn maximum_by_empty_panic() {
         let empty: Vec<u64> = Vec::new();
-
         let _ = empty.iter().maximum_by(&mut |_, _| Ordering::Greater);
+    }
+    #[should_panic(expected = "Failed to find minimum value")]
+    #[test]
+    fn minimum_empty_panic() {
+        let empty: Vec<u64> = Vec::new();
+        let _ = empty.iter().minimum();
+    }
+    #[should_panic(expected = "Failed to find minimum value")]
+    #[test]
+    fn minimum_by_empty_panic() {
+        let empty: Vec<u64> = Vec::new();
+        let _ = empty.iter().minimum_by(&mut |_, _| Ordering::Greater);
     }
 }
