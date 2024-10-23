@@ -1,5 +1,35 @@
-# BigNum custom library
-This is mostly just a notes pags for now
+# Custom Big Numbers in Rust
+## Inspiration
+Recently I was laying out the basics for an idle game that was starting to involve math with increasingly large numbers. 
+It made me realize how limiting `u64` and `f64`, or even their plus-sized counterparts `u128` and `f128`, can be. `u64` 
+has a range of `[0, 2^64)` and `f64` can represent numbers between `~(-1.8e308, 1.8e308)`. While a well-designed idle 
+game can certainly work around that and many deliberately do (Leaf Blower Revolution's cap of resource count to `1e300` 
+comes to mind), I thought it was a bit limiting and also added in a lot of verification I would have to do to ensure I
+never hit that limit. 
+
+## Alternatives Considered
+- `f128`/`u128` are available as mentioned above, but
+    - They're implemented in software, very efficiently certainly, but still they miss out on some of the performance
+    benefits of using primitive types
+    - As mentioned above the range isn't *that* much bigger. For `f128` a lot of extra bits go to significand so don't 
+    affect the max/min value. For `u128` it raises the range to `[0, 2^128)` but when working with exponential functions
+    this is not that much larger
+- `num_bigint` is another project with superficially similar goals, but
+    - `BigUInt` isn't `Copy` which makes things slightly more annoying
+    - `BigUInt`, if I'm reading the code right, has arbitrary precision
+        - My implementation would use the same value to represent the below numbers:
+            - `0xFFFF_FFFF_FFFF_FFFF_FFFF`
+            - `0xFFFF_FFFF_FFFF_FFFF_0000`
+            - They would both be stored as `BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 16)`
+        - `BigUInt` stores this internally as `Vec::from[0x0000_0000_0000_FFFF, 0xFFFF_FFFF_FFFF_FFFF]` for a 64-bit 
+        system, keeping all bits of information around
+    - This level of precision is admirable and it's very important in a lot of contexts, but TUI idle games are probably
+    not one of them
+
+
+
+
+# EVERYTHING BELOW IS OLD, LEAVING FOR REFERENCE FOR NOW
 
 ## Preface
 With two u64 values representing a base and an exponent we can implement a more flexible representation that can handle small and large numbers (integers)

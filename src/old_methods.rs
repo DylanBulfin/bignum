@@ -1,5 +1,15 @@
 use crate::{utils, BigNum, MIN_BASE_VAL};
 
+/// The exponent x such that self = c * 2^x for some c between 0 and 1
+pub fn get_full_exp(bn: BigNum) -> u64 {
+    if bn.exp == 0 {
+        utils::get_exp_u64(bn.base)
+    } else {
+        // Panics when bn.exp + 63 > u64::MAX
+        bn.exp + 63
+    }
+}
+
 /// Initial try implementing addition
 pub fn add_old(lhs: BigNum, rhs: BigNum) -> BigNum {
     if lhs.exp == 0 && rhs.exp == 0 {
@@ -20,10 +30,10 @@ pub fn add_old(lhs: BigNum, rhs: BigNum) -> BigNum {
         let shift = if min.exp == 0 {
             max.exp
         } else {
-            max.get_full_exp() - min.get_full_exp()
+            get_full_exp(max) - get_full_exp(min)
         };
 
-        if shift >= 64 || shift > min.get_full_exp() {
+        if shift >= 64 || shift > get_full_exp(min) {
             // Shifting will leave us with 0 so don't bother, return max
             max
         } else {
@@ -78,11 +88,11 @@ pub fn sub_old(lhs: BigNum, rhs: BigNum) -> BigNum {
         let shift = if rhs.exp == 0 {
             lhs.exp
         } else {
-            lhs.get_full_exp() - rhs.get_full_exp()
+            get_full_exp(lhs) - get_full_exp(rhs)
         };
 
-        if shift >= 64 || shift > rhs.get_full_exp() {
-            if lhs.base == MIN_BASE_VAL && (shift == 64 || shift == rhs.get_full_exp() + 1) {
+        if shift >= 64 || shift > get_full_exp(rhs) {
+            if lhs.base == MIN_BASE_VAL && (shift == 64 || shift == get_full_exp(rhs) + 1) {
                 // Base is at the minimum value so we need to handle edge case
                 // E.g. BigNum::new(0x8000_0000_0000_0000, 1) - BigNum::from(1)
                 // shift = 1, get_full_exp = 0, so normally we would skip

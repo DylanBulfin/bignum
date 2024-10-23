@@ -10,17 +10,18 @@ use utils::get_exp_u64;
 
 pub mod old_methods;
 mod utils;
+pub mod myu128;
 
-// Equal to 2^63
+/// Equal to `2^63`, minimum allowed value for base in non-compact `BigNum`
 const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
 
-/// Marker trait used for types that can be converted into BigNum
-/// This is used to allow for easy definition of methods like Add<T>
+/// Marker trait used for types that can be converted into `BigNum`
+/// This is used to allow for easy definition of methods like `Add<T>`
 pub trait BigNumConvertable: Into<BigNum> {}
 
-/// Representation of large number. Formula to get true value is base * 2^exp
+/// Representation of large number. Formula to get true value is `base * 2^exp`
 ///
-/// You should probably use BigNum::from(n) or n.into() instead of manually constructing this
+/// You should probably use `BigNum::from(n)` or `n.into()` instead of manually constructing this
 ///
 /// # Examples
 /// ```
@@ -65,7 +66,7 @@ impl BigNum {
 
     pub const MIN: Self = Self::ZERO;
 
-    /// Create a BigNum instance directly (e.g. not through the From trait)
+    /// Create a `BigNum` instance directly (e.g. not through the `From` trait)
     pub fn new(base: u64, exp: u64) -> Self {
         if base == 0 && exp != 0 {
             panic!("Invalid BigNum: base is 0 but exp is {}", exp)
@@ -77,16 +78,6 @@ impl BigNum {
             base,
             exp,
             invalidate: false,
-        }
-    }
-
-    /// The exponent x such that self = c * 2^x for some c between 0 and 1
-    pub fn get_full_exp(&self) -> u64 {
-        if self.exp == 0 {
-            utils::get_exp_u64(self.base)
-        } else {
-            // Panics when self.exp + 63 > u64::MAX
-            self.exp + 63
         }
     }
 }
@@ -117,7 +108,7 @@ impl PartialOrd for BigNum {
 ///
 /// Not uniform in the integer sense. This is because we generate a random u64 for the exp and then
 /// a base (and then validate). E.g. it is basically just as likely to generate a number between
-/// 2^10000000000 and 2^10000000100 as it is to generate numbers between 0 and 2^100 (~10^30)
+/// `2^10000000000` and `2^10000000100` as it is to generate numbers between `0` and `2^100 (~10^30)`
 ///
 /// This means it is almost certainly only useful for testing
 pub struct UniformBigNum {
