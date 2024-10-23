@@ -8,9 +8,9 @@ use std::{
 use rand::distributions::uniform::{SampleBorrow, SampleUniform, UniformInt, UniformSampler};
 use utils::get_exp_u64;
 
+pub mod myu128;
 pub mod old_methods;
 mod utils;
-pub mod myu128;
 
 /// Equal to `2^63`, minimum allowed value for base in non-compact `BigNum`
 const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
@@ -513,6 +513,51 @@ where
     }
 }
 
+pub trait Maximum: Sized {
+    type Output: Ord;
+
+    fn maximum_by_checked<F>(self, f: &mut F) -> Option<Self::Output>
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering;
+
+    fn maximum_checked(self) -> Option<Self::Output> {
+        self.maximum_by_checked(&mut |a, b| a.cmp(&b))
+    }
+
+    fn maximum_by<F>(self, f: &mut F) -> Self::Output
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering,
+    {
+        self.maximum_by_checked(f)
+            .expect("Failed to find maximum value")
+    }
+
+    fn maximum(self) -> Self::Output {
+        self.maximum_checked()
+            .expect("Failed to find maximum value")
+    }
+}
+
+impl<T, I> Maximum for I
+where
+    I: Iterator<Item = T>,
+    T: Ord + Copy,
+{
+    type Output = T;
+
+    fn maximum_by_checked<F>(mut self, f: &mut F) -> Option<Self::Output>
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering,
+    {
+        self.next().map(|start| {
+            self.fold(
+                start,
+                |acc, x| if f(acc, x) == Ordering::Less { x } else { acc },
+            )
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rand::{distributions::Uniform, prelude::Distribution, thread_rng};
@@ -761,5 +806,58 @@ mod tests {
         // Fairly slow to run, but completed in <1m on my computer
         // May fail once, always re-run (unlikely but possible)
         test_rand(10_000_000, 100_000, 10_000)
+    }
+
+    #[test]
+    fn test_max_trait() {
+        let elems = Vec::from([A1, B1, B2, B3, C1, C2, C3, C4, C5]);
+        let empty: Vec<u64> = Vec::new();
+
+        assert_eq!(*elems.iter().maximum(), C5);
+        assert_eq!(
+            *elems.iter().maximum_by(&mut |a, b| match a.cmp(b) {
+                Ordering::Less => Ordering::Greater,
+                Ordering::Greater => Ordering::Less,
+                _ => Ordering::Equal,
+            }),
+            A1
+        );
+
+        assert_eq!(elems.iter().maximum_checked().copied(), Some(C5));
+        assert_eq!(
+            elems
+                .iter()
+                .maximum_by_checked(&mut |a, b| match a.cmp(b) {
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => Ordering::Less,
+                    _ => Ordering::Equal,
+                })
+                .copied(),
+            Some(A1)
+        );
+
+        assert_eq!(empty.iter().maximum_checked(), None);
+        assert_eq!(
+            empty
+                .iter()
+                .maximum_by_checked(&mut |_, _| Ordering::Greater),
+            None
+        );
+    }
+
+    #[should_panic(expected = "Failed to find maximum value")]
+    #[test]
+    fn maximum_empty_panic() {
+        let empty: Vec<u64> = Vec::new();
+
+        let _ = empty.iter().maximum();
+    }
+
+    #[should_panic(expected = "Failed to find maximum value")]
+    #[test]
+    fn maximum_by_empty_panic() {
+        let empty: Vec<u64> = Vec::new();
+
+        let _ = empty.iter().maximum_by(&mut |_, _| Ordering::Greater);
     }
 }
