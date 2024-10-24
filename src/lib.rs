@@ -8,16 +8,13 @@ use std::{
 use rand::distributions::uniform::{SampleBorrow, SampleUniform, UniformInt, UniformSampler};
 use utils::get_exp_u64;
 
+mod macros;
 pub mod myu128;
 pub mod old_methods;
 mod utils;
 
 /// Equal to `2^63`, minimum allowed value for base in non-compact `BigNum`
 const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
-
-/// Marker trait used for types that can be converted into `BigNum`
-/// This is used to allow for easy definition of methods like `Add<T>`
-pub trait BigNumConvertable: Into<BigNum> {}
 
 /// Representation of large number. Formula to get true value is `base * 2^exp`
 ///
@@ -352,166 +349,48 @@ impl Product for BigNum {
     }
 }
 
-impl From<u64> for BigNum {
-    fn from(value: u64) -> Self {
-        BigNum::new(value, 0)
-    }
-}
-
-impl From<u32> for BigNum {
-    fn from(value: u32) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<u16> for BigNum {
-    fn from(value: u16) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<u8> for BigNum {
-    fn from(value: u8) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i64> for BigNum {
-    fn from(value: i64) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i32> for BigNum {
-    fn from(value: i32) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i16> for BigNum {
-    fn from(value: i16) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl From<i8> for BigNum {
-    fn from(value: i8) -> Self {
-        BigNum::new(value as u64, 0)
-    }
-}
-
-impl BigNumConvertable for u64 {}
-impl BigNumConvertable for u32 {}
-impl BigNumConvertable for u16 {}
-impl BigNumConvertable for u8 {}
-impl BigNumConvertable for i64 {}
-impl BigNumConvertable for i32 {}
-impl BigNumConvertable for i16 {}
-impl BigNumConvertable for i8 {}
-
-impl<T> Add<T> for BigNum
+impl<I, T> MinMax for I
 where
-    T: BigNumConvertable,
+    I: Iterator<Item = T>,
+    T: Copy + Into<BigNum> + Ord,
 {
-    type Output = Self;
+    type Output = T;
 
-    fn add(self, rhs: T) -> Self::Output {
-        self + rhs.into()
+    fn maximum_by_checked<F>(mut self, f: &mut F) -> Option<Self::Output>
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering,
+    {
+        self.next().map(|start| {
+            self.fold(
+                start,
+                |acc, x| if f(acc, x) == Ordering::Less { x } else { acc },
+            )
+        })
+    }
+    fn minimum_by_checked<F>(mut self, f: &mut F) -> Option<Self::Output>
+    where
+        F: FnMut(Self::Output, Self::Output) -> Ordering,
+    {
+        self.next().map(|start| {
+            self.fold(start, |acc, x| {
+                if f(acc, x) == Ordering::Greater {
+                    x
+                } else {
+                    acc
+                }
+            })
+        })
     }
 }
 
-impl AddAssign for BigNum {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
-impl<T> AddAssign<T> for BigNum
-where
-    T: BigNumConvertable,
-{
-    fn add_assign(&mut self, rhs: T) {
-        *self = *self + rhs.into();
-    }
-}
-
-impl<T> Sub<T> for BigNum
-where
-    T: BigNumConvertable,
-{
-    type Output = Self;
-
-    fn sub(self, rhs: T) -> Self::Output {
-        self - rhs.into()
-    }
-}
-
-impl SubAssign for BigNum {
-    fn sub_assign(&mut self, rhs: Self) {
-        *self = *self - rhs;
-    }
-}
-
-impl<T> SubAssign<T> for BigNum
-where
-    T: BigNumConvertable,
-{
-    fn sub_assign(&mut self, rhs: T) {
-        *self = *self - rhs.into();
-    }
-}
-
-impl<T> Mul<T> for BigNum
-where
-    T: BigNumConvertable,
-{
-    type Output = Self;
-
-    fn mul(self, rhs: T) -> Self::Output {
-        self * rhs.into()
-    }
-}
-
-impl MulAssign for BigNum {
-    fn mul_assign(&mut self, rhs: Self) {
-        *self = *self * rhs;
-    }
-}
-
-impl<T> MulAssign<T> for BigNum
-where
-    T: BigNumConvertable,
-{
-    fn mul_assign(&mut self, rhs: T) {
-        *self = *self * rhs.into();
-    }
-}
-
-impl<T> Div<T> for BigNum
-where
-    T: BigNumConvertable,
-{
-    type Output = Self;
-
-    fn div(self, rhs: T) -> Self::Output {
-        self / rhs.into()
-    }
-}
-
-impl DivAssign for BigNum {
-    fn div_assign(&mut self, rhs: Self) {
-        *self = *self / rhs;
-    }
-}
-
-impl<T> DivAssign<T> for BigNum
-where
-    T: BigNumConvertable,
-{
-    fn div_assign(&mut self, rhs: T) {
-        *self = *self / rhs.into();
-    }
-}
+bignum_math_impl!(u64);
+bignum_math_impl!(u32);
+bignum_math_impl!(u16);
+bignum_math_impl!(u8);
+bignum_math_impl!(i64);
+bignum_math_impl!(i32);
+bignum_math_impl!(i16);
+bignum_math_impl![i8];
 
 pub trait MinMax: Sized {
     type Output: Ord;
@@ -656,40 +535,6 @@ impl Mul<Ratio> for BigNum {
         // Need to consider whether we should multiply or divide first
         // For now we do multiplication first
         (self * rhs.numerator) >> get_exp_u64(rhs.denominator as u64)
-    }
-}
-
-impl<T, I> MinMax for I
-where
-    I: Iterator<Item = T>,
-    T: Ord + Copy,
-{
-    type Output = T;
-
-    fn maximum_by_checked<F>(mut self, f: &mut F) -> Option<Self::Output>
-    where
-        F: FnMut(Self::Output, Self::Output) -> Ordering,
-    {
-        self.next().map(|start| {
-            self.fold(
-                start,
-                |acc, x| if f(acc, x) == Ordering::Less { x } else { acc },
-            )
-        })
-    }
-    fn minimum_by_checked<F>(mut self, f: &mut F) -> Option<Self::Output>
-    where
-        F: FnMut(Self::Output, Self::Output) -> Ordering,
-    {
-        self.next().map(|start| {
-            self.fold(start, |acc, x| {
-                if f(acc, x) == Ordering::Greater {
-                    x
-                } else {
-                    acc
-                }
-            })
-        })
     }
 }
 
@@ -1035,6 +880,6 @@ mod tests {
 
     #[test]
     fn shift_test() {
-
+        // TODO add this test
     }
 }
