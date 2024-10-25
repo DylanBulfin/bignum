@@ -84,25 +84,18 @@ result I adjust the `exp` of the output and normalize.
 
 ### String Representation
 The interesting part about this is converting to base-10 notation in an efficient way.
-```
-a * 2^b = c * 10^d
-=> 10^d = a/c * 2^b
-=> d = log10(10^d) = log10(a/c * 2^b) = log2(a/c * 2^b) / log2(10)
-=> d = (log2(a) - log2(c) + log2(2^b)) / log2(10)
-=> d ~ (log2(a) - log2(c) + b) * 1233 / 4096
-=> c ~ (4096 * d / 1233) / (log2(a) - log2(c))
-```
-The approximation of 
-`log2(10) ~ 4096 / 1233 is from [this article about bit hacks](https://graphics.stanford.edu/%7Eseander/bithacks.html#IntegerLog)`. 
-Computing `log2` on integers is very efficient for reasons the above resource also goes into. The only thing left to do 
-is normalize `c` to a value in the range `[0, 10)`. For this:
-- First, find the highest exponent `x` such that `c >= 10 ^ x`, this can be done with an integer `log10`
-    - Since `log10(n)` is a constant multiple of `log2(n)` for all `n` it can be quickly computed as well
-- Then convert `c` to an `f64`, divide by `10^x`, and add `x` to `d` to compensate
-This algorithm should really be pretty efficient, especially compared to I/O, which is very important since this will
-primarily be used to print the value to the screen. 
+
+My old solution didn't actually do anything so I've removed it while I work on an update. 
 
 
-
+#### Improvements
+- Maybe I should compute the above when creating a new `BigNum` and store it in the struct?
+    - On the other hand, since many/most `BigNum` values will be intermediaries that aren't ever printed, this may 
+    add more overhead than it's worth. 
+    - Could do it conditionally? Have a `cache_decimal` field that is set when the user wants to create a 
+    longer-lived value? E.g. the cost of the next unit in a game, which will be written to the screen 60 times per
+    second and likely only updated every few seconds at the very most
+    - On the other other hand this algorithm may calculate the value many times faster than the value can be printed, 
+    so this would be a waste
 
 ### Bonus Stuff
