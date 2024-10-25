@@ -43,24 +43,28 @@ pub struct BigNum {
 }
 
 impl BigNum {
+    /// Equivalent to `BigNum::from(0)`
     pub const ZERO: Self = Self {
         base: 0,
         exp: 0,
         invalidate: true,
     };
 
+    /// Equivalent to `BigNum::from(1)`
     pub const ONE: Self = Self {
         base: 1,
         exp: 0,
         invalidate: true,
     };
 
+    /// The maximum value for `BigNum`, equal to `(2^64 - 1) * 2^(2^64 - 1)`
     pub const MAX: Self = Self {
         base: u64::MAX,
         exp: u64::MAX,
         invalidate: true,
     };
 
+    /// Since `BigNum` is unsigned this is just Self::ZERO, still provided for convenience
     pub const MIN: Self = Self::ZERO;
 
     /// Create a `BigNum` instance directly (e.g. not through the `From` trait)
@@ -76,6 +80,11 @@ impl BigNum {
             exp,
             invalidate: false,
         }
+    }
+
+    /// Convert this BigNum to a base-10 numeric string (e.g. `1.23e456`)
+    pub fn as_num_string(&self) -> String {
+
     }
 }
 
