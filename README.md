@@ -84,8 +84,33 @@ result I adjust the `exp` of the output and normalize.
 
 ### String Representation
 The interesting part about this is converting to base-10 notation in an efficient way.
+Waaaay more difficult than I thought it would be 
 
-My old solution didn't actually do anything so I've removed it while I work on an update. 
+The main thing to worry about is that any calculation we do is likely to have some imprecision, and we want to avoid a
+situation where the exponent of the output jumps due to this. 
+
+```
+// We want to solve for 1 <= c: f64 < 10, d: u64 in
+a * 2^b = c * 10^d
+
+log10(a * 2^b) = log10(c * 10^d)
+=> log10(a) + b * log10(2) = log10(c) + d
+=> d = log10(a) + b * log10(2) - log10(c)
+=> d = log10(a / c) + b * log10(2)
+=> d ~ log10(a / c) + b * 1233 / 4096
+=> d ~ log10(a) - log10(c) + b * 1233 / 4096
+```
+
+The approximation of `log10(2) ~ 1233 / 4096` is from [this article on efficient bitwise math on integers]
+(https://graphics.stanford.edu/%7Eseander/bithacks.html#IntegerLog). 
+
+With this we need to recognize that `d` is an integer. We can compute the value of `log10(a)` and `b * 1233 / 4096` very
+quickly. And since we know that `1 <= c < 10`, `0 <= log10(c) < 1`. So we need to find the `log10(c)` such that `d`
+is an integer, and use this to find `c`. 
+
+We must be careful, though, because the approximation I used means that there might be some error in `d`. The error of 
+this estimation is `(log10(2) - 1233 / 4096) / log10(2) ~ 0.0000153`, e.g. the estimate can have around `0.0015%` error.
+At a certain magnitude this probably doesn't matter; for `1.1 * 10^(10^10)` being off by this amount is meaningless
 
 
 #### Improvements

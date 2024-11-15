@@ -84,7 +84,20 @@ impl BigNum {
 
     /// Convert this BigNum to a base-10 numeric string (e.g. `1.23e456`)
     pub fn as_num_string(&self) -> String {
+        unimplemented!()
+    }
 
+    pub fn succ(&self) -> Self {
+        if self.exp == 0 {
+            // Compact form, can simply add 1
+            *self + 1
+        } else if self.exp <= 63 {
+            // Difference will still be compact number
+            *self + (1u64 << self.exp)
+        } else {
+            // Difference will also be expanded
+            *self + BigNum::new(MIN_BASE_VAL, self.exp - 63)
+        }
     }
 }
 
