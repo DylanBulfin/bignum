@@ -8,9 +8,12 @@ use std::{
 use rand::distributions::uniform::{SampleBorrow, SampleUniform, UniformInt, UniformSampler};
 use utils::get_exp_u64;
 
+pub mod alt_base;
+pub mod error;
 mod macros;
 pub mod myu128;
 pub mod old_methods;
+pub mod powers;
 mod utils;
 
 /// Equal to `2^63`, minimum allowed value for base in non-compact `BigNum`
@@ -22,27 +25,27 @@ const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
 ///
 /// # Examples
 /// ```
-/// use bignum::BigNum;
+/// //use bignum::alt_base::BigNum;
 ///
-/// let a = BigNum::from(0x10000u64); // 2^16
-/// let b = BigNum::from(0xFFFF_FFFF_FFFF_FFFFu64);
-/// let c = a * b;
-/// let d = c / BigNum::from(2);
-/// let e = (a - a) + (b - b) + (c - c) + (d - d);
+/// //let a = BigNum::from(0x10000u64); // 2^16
+/// //let b = BigNum::from(0xFFFF_FFFF_FFFF_FFFFu64);
+/// //let c = a * b;
+/// //let d = c / BigNum::from(2);
+/// //let e = (a - a) + (b - b) + (c - c) + (d - d);
 ///
-/// assert_eq!(c, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 16));
-/// assert_eq!(d, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 15));
-/// assert_eq!(e, BigNum::ZERO);
+/// //assert_eq!(c, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 16));
+/// //assert_eq!(d, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 15));
+/// //assert_eq!(e, BigNum::ZERO);
 /// ```
 #[derive(Debug, Clone, Copy, Eq)]
-pub struct BigNum {
+pub struct BigNumOld {
     base: u64,
     exp: u64,
     // This field keeps me from accidentally constructing this struct manually
     invalidate: bool,
 }
 
-impl BigNum {
+impl BigNumOld {
     /// Equivalent to `BigNum::from(0)`
     pub const ZERO: Self = Self {
         base: 0,
@@ -96,18 +99,18 @@ impl BigNum {
             *self + (1u64 << self.exp)
         } else {
             // Difference will also be expanded
-            *self + BigNum::new(MIN_BASE_VAL, self.exp - 63)
+            *self + BigNumOld::new(MIN_BASE_VAL, self.exp - 63)
         }
     }
 }
 
-impl PartialEq for BigNum {
+impl PartialEq for BigNumOld {
     fn eq(&self, other: &Self) -> bool {
         self.base == other.base && self.exp == other.exp
     }
 }
 
-impl Ord for BigNum {
+impl Ord for BigNumOld {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.exp.cmp(&other.exp) {
             Ordering::Equal => (),
@@ -117,7 +120,7 @@ impl Ord for BigNum {
     }
 }
 
-impl PartialOrd for BigNum {
+impl PartialOrd for BigNumOld {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -131,13 +134,13 @@ impl PartialOrd for BigNum {
 ///
 /// This means it is almost certainly only useful for testing
 pub struct UniformBigNum {
-    low: BigNum,
-    high: BigNum,
+    low: BigNumOld,
+    high: BigNumOld,
     inclusive: bool,
 }
 
 impl UniformSampler for UniformBigNum {
-    type X = BigNum;
+    type X = BigNumOld;
 
     fn new<B1, B2>(low: B1, high: B2) -> Self
     where
@@ -216,9 +219,9 @@ impl UniformSampler for UniformBigNum {
             // ABOVE IS OUTDATED, LEFT FOR LATER REFERENCE
 
             if exp_sample == 0 {
-                BigNum::new(base_sample, exp_sample)
+                BigNumOld::new(base_sample, exp_sample)
             } else {
-                BigNum::new(valid_base_sample, exp_sample)
+                BigNumOld::new(valid_base_sample, exp_sample)
             }
         };
         let mut sample = generate();
@@ -231,11 +234,11 @@ impl UniformSampler for UniformBigNum {
     }
 }
 
-impl SampleUniform for BigNum {
+impl SampleUniform for BigNumOld {
     type Sampler = UniformBigNum;
 }
 
-impl Add for BigNum {
+impl Add for BigNumOld {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -251,15 +254,15 @@ impl Add for BigNum {
 
         if result < max.base {
             // Wrap occurred, need to normalize value and exp
-            BigNum::new((result >> 1) + MIN_BASE_VAL, max.exp + 1)
+            BigNumOld::new((result >> 1) + MIN_BASE_VAL, max.exp + 1)
         } else {
             // No wrap, easy
-            BigNum::new(result, max.exp)
+            BigNumOld::new(result, max.exp)
         }
     }
 }
 
-impl Sub for BigNum {
+impl Sub for BigNumOld {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -295,39 +298,39 @@ impl Sub for BigNum {
     }
 }
 
-impl Mul for BigNum {
+impl Mul for BigNumOld {
     type Output = Self;
 
-    fn mul(self, rhs: BigNum) -> Self::Output {
+    fn mul(self, rhs: BigNumOld) -> Self::Output {
         let result: u128 = self.base as u128 * rhs.base as u128;
         let max_pow = utils::get_exp_u128(result) as u64;
 
         if max_pow < 64 {
             // Result is compact
-            BigNum::new(result as u64, self.exp + rhs.exp)
+            BigNumOld::new(result as u64, self.exp + rhs.exp)
         } else {
             // Result is expanded
             let adj = max_pow - 63;
 
-            BigNum::new((result >> adj) as u64, self.exp + rhs.exp + adj)
+            BigNumOld::new((result >> adj) as u64, self.exp + rhs.exp + adj)
         }
     }
 }
 
-impl Div for BigNum {
+impl Div for BigNumOld {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
-        if rhs == BigNum::ZERO {
+        if rhs == BigNumOld::ZERO {
             panic!("Attempt to divide BigNum by zero")
         }
         if rhs > self {
             // Division will result in 0
-            return BigNum::ZERO;
+            return BigNumOld::ZERO;
         }
         if rhs == self {
             // Division will result in 1
-            return BigNum::ONE;
+            return BigNumOld::ONE;
         }
 
         let lhs_n = (self.base as u128) << 64;
@@ -347,27 +350,27 @@ impl Div for BigNum {
                 // Result can be made compact
                 // If we want to adjust by 3 but self.exp is 1, we subtract 1 from adj
                 // and then shift result by 2 (3 - 1)
-                BigNum::new((result >> (64 - self.exp + rhs.exp)) as u64, 0)
+                BigNumOld::new((result >> (64 - self.exp + rhs.exp)) as u64, 0)
             } else {
                 // Result is expanded
-                BigNum::new((result >> shift) as u64, self.exp - rhs.exp - adj)
+                BigNumOld::new((result >> shift) as u64, self.exp - rhs.exp - adj)
             }
         } else {
             // self is compact so result must be compact
-            BigNum::new((result >> 64) as u64, 0)
+            BigNumOld::new((result >> 64) as u64, 0)
         }
     }
 }
 
-impl Sum for BigNum {
+impl Sum for BigNumOld {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(BigNum::ZERO, |acc, x| acc + x)
+        iter.fold(BigNumOld::ZERO, |acc, x| acc + x)
     }
 }
 
-impl Product for BigNum {
+impl Product for BigNumOld {
     fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(BigNum::ONE, |acc, x| acc * x)
+        iter.fold(BigNumOld::ONE, |acc, x| acc * x)
     }
 }
 
@@ -382,7 +385,7 @@ bignum_math_impl![i8];
 
 // Technically possible to have valid shift outside of u64 range
 // TODO implement thi
-impl Shl<u128> for BigNum {
+impl Shl<u128> for BigNumOld {
     type Output = Self;
 
     fn shl(self, rhs: u128) -> Self::Output {
@@ -390,7 +393,7 @@ impl Shl<u128> for BigNum {
     }
 }
 
-impl Shr<u64> for BigNum {
+impl Shr<u64> for BigNumOld {
     type Output = Self;
 
     fn shr(self, rhs: u64) -> Self::Output {
@@ -419,7 +422,7 @@ impl Shr<u64> for BigNum {
     }
 }
 
-impl Shl<u64> for BigNum {
+impl Shl<u64> for BigNumOld {
     type Output = Self;
 
     fn shl(self, rhs: u64) -> Self::Output {
@@ -470,8 +473,8 @@ impl Ratio {
     }
 }
 
-impl Mul<Ratio> for BigNum {
-    type Output = BigNum;
+impl Mul<Ratio> for BigNumOld {
+    type Output = BigNumOld;
 
     fn mul(self, rhs: Ratio) -> Self::Output {
         // Need to consider whether we should multiply or divide first
@@ -486,41 +489,41 @@ mod tests {
 
     use super::*;
 
-    const A1: BigNum = BigNum::ZERO;
+    const A1: BigNumOld = BigNumOld::ZERO;
 
-    const B1: BigNum = BigNum::ONE;
-    const B2: BigNum = BigNum {
+    const B1: BigNumOld = BigNumOld::ONE;
+    const B2: BigNumOld = BigNumOld {
         base: 0x8000_0000_0000_0000,
         exp: 0,
         invalidate: false,
     };
-    const B3: BigNum = BigNum {
+    const B3: BigNumOld = BigNumOld {
         base: 0xFFFF_FFFF_FFFF_FFFF,
         exp: 0,
         invalidate: false,
     };
 
-    const C1: BigNum = BigNum {
+    const C1: BigNumOld = BigNumOld {
         base: 0x8000_0000_0000_0000,
         exp: 10,
         invalidate: false,
     };
-    const C2: BigNum = BigNum {
+    const C2: BigNumOld = BigNumOld {
         base: 0x8000_0000_0000_0000,
         exp: 73,
         invalidate: false,
     };
-    const C3: BigNum = BigNum {
+    const C3: BigNumOld = BigNumOld {
         base: 0xFFFF_FFFF_FFFF_FFFF,
         exp: 120,
         invalidate: false,
     };
-    const C4: BigNum = BigNum {
+    const C4: BigNumOld = BigNumOld {
         base: 0xFFFF_FFFF_FFFF_FFFF,
         exp: 127000,
         invalidate: false,
     };
-    const C5: BigNum = BigNum {
+    const C5: BigNumOld = BigNumOld {
         base: u64::MAX,
         exp: u64::MAX,
         invalidate: false,
@@ -529,21 +532,21 @@ mod tests {
     #[test]
     fn add() {
         // A
-        assert_eq!(A1 + A1, BigNum::ZERO);
+        assert_eq!(A1 + A1, BigNumOld::ZERO);
 
         // A + B -> B
-        assert_eq!(A1 + B1, BigNum::ONE);
+        assert_eq!(A1 + B1, BigNumOld::ONE);
 
         // B
-        assert_eq!(B1 + B2, BigNum::new(0x8000_0000_0000_0001, 0));
+        assert_eq!(B1 + B2, BigNumOld::new(0x8000_0000_0000_0001, 0));
 
         // B + B -> C
-        assert_eq!(B1 + B3, BigNum::new(0x8000_0000_0000_0000, 1));
-        assert_eq!(B2 + B3, BigNum::new(0xBFFF_FFFF_FFFF_FFFF, 1));
+        assert_eq!(B1 + B3, BigNumOld::new(0x8000_0000_0000_0000, 1));
+        assert_eq!(B2 + B3, BigNumOld::new(0xBFFF_FFFF_FFFF_FFFF, 1));
 
         // C
-        assert_eq!(C1 + C2, BigNum::new(0x8000_0000_0000_0001, 73));
-        assert_eq!(C2 + C3, BigNum::new(0x8000_0000_0000_7FFF, 121));
+        assert_eq!(C1 + C2, BigNumOld::new(0x8000_0000_0000_0001, 73));
+        assert_eq!(C2 + C3, BigNumOld::new(0x8000_0000_0000_7FFF, 121));
         assert_eq!(C3 + C4, C4); // Too small to make a difference
         assert_eq!(C1 + C3, C3);
     }
@@ -558,28 +561,28 @@ mod tests {
     #[test]
     fn sub() {
         // A
-        assert_eq!(A1 - A1, BigNum::ZERO);
+        assert_eq!(A1 - A1, BigNumOld::ZERO);
 
         // B - B = A
-        assert_eq!(B1 - B1, BigNum::ZERO);
-        assert_eq!(B2 - B2, BigNum::ZERO);
-        assert_eq!(B3 - B3, BigNum::ZERO);
+        assert_eq!(B1 - B1, BigNumOld::ZERO);
+        assert_eq!(B2 - B2, BigNumOld::ZERO);
+        assert_eq!(B3 - B3, BigNumOld::ZERO);
 
         // B - B = B
-        assert_eq!(B2 - B1, BigNum::new(0x7FFF_FFFF_FFFF_FFFF, 0));
-        assert_eq!(B3 - B1, BigNum::new(0xFFFF_FFFF_FFFF_FFFE, 0));
-        assert_eq!(B3 - B2, BigNum::new(0x7FFF_FFFF_FFFF_FFFF, 0));
+        assert_eq!(B2 - B1, BigNumOld::new(0x7FFF_FFFF_FFFF_FFFF, 0));
+        assert_eq!(B3 - B1, BigNumOld::new(0xFFFF_FFFF_FFFF_FFFE, 0));
+        assert_eq!(B3 - B2, BigNumOld::new(0x7FFF_FFFF_FFFF_FFFF, 0));
 
         // C - C = A
-        assert_eq!(C1 - C1, BigNum::ZERO);
-        assert_eq!(C2 - C2, BigNum::ZERO);
-        assert_eq!(C3 - C3, BigNum::ZERO);
-        assert_eq!(C4 - C4, BigNum::ZERO);
-        assert_eq!(C5 - C5, BigNum::ZERO);
+        assert_eq!(C1 - C1, BigNumOld::ZERO);
+        assert_eq!(C2 - C2, BigNumOld::ZERO);
+        assert_eq!(C3 - C3, BigNumOld::ZERO);
+        assert_eq!(C4 - C4, BigNumOld::ZERO);
+        assert_eq!(C5 - C5, BigNumOld::ZERO);
 
         // C - B = B
-        assert_eq!(C1 - B2, BigNum::new(0xFFC0_0000_0000_0000, 9));
-        assert_eq!(C1 - B3, BigNum::new(0xFF80_0000_0000_0002, 9));
+        assert_eq!(C1 - B2, BigNumOld::new(0xFFC0_0000_0000_0000, 9));
+        assert_eq!(C1 - B3, BigNumOld::new(0xFF80_0000_0000_0002, 9));
 
         // C - A = C
         assert_eq!(C1 - A1, C1);
@@ -611,66 +614,66 @@ mod tests {
     fn mul_u64() {
         let a = 1u64;
         let b = 0xFFFF_FFFF_FFFF_FFFFu64;
-        let c = BigNum::new(MIN_BASE_VAL, 1);
+        let c = BigNumOld::new(MIN_BASE_VAL, 1);
 
         assert_eq!(c * a, c);
-        assert_eq!(c * b, BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 64));
+        assert_eq!(c * b, BigNumOld::new(0xFFFF_FFFF_FFFF_FFFF, 64));
 
-        let d = BigNum::from(0x8000_1000_1000_1000u64);
+        let d = BigNumOld::from(0x8000_1000_1000_1000u64);
         let e = 2u64;
-        assert_eq!(d * e, BigNum::new(0x8000_1000_1000_1000, 1));
+        assert_eq!(d * e, BigNumOld::new(0x8000_1000_1000_1000, 1));
 
         let f = 3u64;
-        assert_eq!(d * f, BigNum::new(0xC000_1800_1800_1800, 1));
+        assert_eq!(d * f, BigNumOld::new(0xC000_1800_1800_1800, 1));
 
-        let g = BigNum::new(0x8000_1000_1000_1000, 100);
-        assert_eq!(g * f, BigNum::new(0xC000_1800_1800_1800, 101));
+        let g = BigNumOld::new(0x8000_1000_1000_1000, 100);
+        assert_eq!(g * f, BigNumOld::new(0xC000_1800_1800_1800, 101));
     }
 
     #[test]
     fn div_u64() {
         let a = 1u64;
         let b = 0x8000u64;
-        let c = BigNum::new(MIN_BASE_VAL, 1);
+        let c = BigNumOld::new(MIN_BASE_VAL, 1);
 
         assert_eq!(c / a, c);
-        assert_eq!(c / b, BigNum::new(0x0002_0000_0000_0000, 0));
+        assert_eq!(c / b, BigNumOld::new(0x0002_0000_0000_0000, 0));
 
-        let d = BigNum::from(0x8000_1000_1000_1000u64);
+        let d = BigNumOld::from(0x8000_1000_1000_1000u64);
         let e = 2u64;
-        assert_eq!(d / e, BigNum::new(0x4000_0800_0800_0800, 0));
+        assert_eq!(d / e, BigNumOld::new(0x4000_0800_0800_0800, 0));
 
         //let d = BigNum::from(1e19)
         // d is right above lower limit for base
-        let f = BigNum::new(10_000_000_000_000_000_000u64, 1);
+        let f = BigNumOld::new(10_000_000_000_000_000_000u64, 1);
         let g = 5u64;
-        assert_eq!(f / g, BigNum::from(4_000_000_000_000_000_000u64));
+        assert_eq!(f / g, BigNumOld::from(4_000_000_000_000_000_000u64));
 
-        let h = BigNum::new(MIN_BASE_VAL, 10000);
-        let i = BigNum::new(MIN_BASE_VAL, 9937);
-        let j = BigNum::new(MIN_BASE_VAL, 9936);
-        assert_eq!(h / i, BigNum::new(MIN_BASE_VAL, 0));
-        assert_eq!(h / j, BigNum::new(MIN_BASE_VAL, 1));
+        let h = BigNumOld::new(MIN_BASE_VAL, 10000);
+        let i = BigNumOld::new(MIN_BASE_VAL, 9937);
+        let j = BigNumOld::new(MIN_BASE_VAL, 9936);
+        assert_eq!(h / i, BigNumOld::new(MIN_BASE_VAL, 0));
+        assert_eq!(h / j, BigNumOld::new(MIN_BASE_VAL, 1));
 
-        assert_eq!(c / c, BigNum::ONE);
-        assert_eq!(d / d, BigNum::ONE);
-        assert_eq!(f / f, BigNum::ONE);
-        assert_eq!(h / h, BigNum::ONE);
-        assert_eq!(i / i, BigNum::ONE);
-        assert_eq!(j / j, BigNum::ONE);
+        assert_eq!(c / c, BigNumOld::ONE);
+        assert_eq!(d / d, BigNumOld::ONE);
+        assert_eq!(f / f, BigNumOld::ONE);
+        assert_eq!(h / h, BigNumOld::ONE);
+        assert_eq!(i / i, BigNumOld::ONE);
+        assert_eq!(j / j, BigNumOld::ONE);
     }
 
     #[should_panic]
     #[test]
     fn div_zero() {
-        let _ = BigNum::ONE / BigNum::ZERO;
+        let _ = BigNumOld::ONE / BigNumOld::ZERO;
     }
 
     fn test_rand(iterations: usize, confidence_width: usize, exp_confidence_width: usize) {
         // I'm deliberately using occasionally-failing tests here to test the distribution, if this
         // test fails it will probably work by re-running it
-        let full_rand = Uniform::new(BigNum::ZERO, BigNum::MAX);
-        let small_rand = Uniform::new_inclusive(BigNum::ONE, BigNum::from(1000));
+        let full_rand = Uniform::new(BigNumOld::ZERO, BigNumOld::MAX);
+        let small_rand = Uniform::new_inclusive(BigNumOld::ONE, BigNumOld::from(1000));
 
         // Holds number of samples that were in the range [1,100) for each sampler
         let mut full_count = 0;
@@ -684,13 +687,13 @@ mod tests {
             let full_samp = full_rand.sample(&mut thread_rng());
             let small_samp = small_rand.sample(&mut thread_rng());
 
-            if full_samp >= BigNum::from(10) && full_samp <= BigNum::from(100) {
+            if full_samp >= BigNumOld::from(10) && full_samp <= BigNumOld::from(100) {
                 full_count += 1;
             }
-            if small_samp >= BigNum::from(10) && small_samp <= BigNum::from(100) {
+            if small_samp >= BigNumOld::from(10) && small_samp <= BigNumOld::from(100) {
                 small_count += 1;
             }
-            if full_samp >= BigNum::new(MIN_BASE_VAL, 1 << 63) {
+            if full_samp >= BigNumOld::new(MIN_BASE_VAL, 1 << 63) {
                 exp_count += 1;
             }
         }

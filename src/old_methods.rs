@@ -1,7 +1,7 @@
-use crate::{utils, BigNum, MIN_BASE_VAL};
+use crate::{utils, BigNumOld, MIN_BASE_VAL};
 
 /// The exponent x such that self = c * 2^x for some c between 0 and 1
-pub fn get_full_exp(bn: BigNum) -> u64 {
+pub fn get_full_exp(bn: BigNumOld) -> u64 {
     if bn.exp == 0 {
         utils::get_exp_u64(bn.base)
     } else {
@@ -11,16 +11,16 @@ pub fn get_full_exp(bn: BigNum) -> u64 {
 }
 
 /// Initial try implementing addition
-pub fn add_old(lhs: BigNum, rhs: BigNum) -> BigNum {
+pub fn add_old(lhs: BigNumOld, rhs: BigNumOld) -> BigNumOld {
     if lhs.exp == 0 && rhs.exp == 0 {
         // Both numbers are in compact form, first try normal addition
         let result = lhs.base.wrapping_add(rhs.base);
 
         // If remainder is less than either base, overflow occurred
         if result < lhs.base || result < rhs.base {
-            BigNum::new(MIN_BASE_VAL + (result >> 1), 1)
+            BigNumOld::new(MIN_BASE_VAL + (result >> 1), 1)
         } else {
-            BigNum::new(result, 0)
+            BigNumOld::new(result, 0)
         }
     } else {
         // At least one of the numbers is in expanded form, first find which is bigger
@@ -43,16 +43,16 @@ pub fn add_old(lhs: BigNum, rhs: BigNum) -> BigNum {
             // If result is less than either base, overflow occurred
             if res < max.base {
                 // Wrapping occurred, need to fix things up
-                BigNum::new(MIN_BASE_VAL + (res >> 1), max.exp + 1)
+                BigNumOld::new(MIN_BASE_VAL + (res >> 1), max.exp + 1)
             } else {
-                BigNum::new(res, max.exp)
+                BigNumOld::new(res, max.exp)
             }
         }
     }
 }
 
 /// Attempt to implement addition using u128 strategy
-pub fn add_u128(lhs: BigNum, rhs: BigNum) -> BigNum {
+pub fn add_u128(lhs: BigNumOld, rhs: BigNumOld) -> BigNumOld {
     let (max, min) = if lhs > rhs { (lhs, rhs) } else { (rhs, lhs) };
     let shift = max.exp - min.exp;
 
@@ -67,14 +67,14 @@ pub fn add_u128(lhs: BigNum, rhs: BigNum) -> BigNum {
         if max.exp == u64::MAX {
             panic!("Attempt to add BigNum with overflow");
         }
-        BigNum::new((result >> 1) as u64, 1 + max.exp)
+        BigNumOld::new((result >> 1) as u64, 1 + max.exp)
     } else {
         //(result as u64).into()
-        BigNum::new((result) as u64, max.exp)
+        BigNumOld::new((result) as u64, max.exp)
     }
 }
 
-pub fn sub_old(lhs: BigNum, rhs: BigNum) -> BigNum {
+pub fn sub_old(lhs: BigNumOld, rhs: BigNumOld) -> BigNumOld {
     if rhs > lhs {
         // We can't have negative numbers
         panic!("Attempt to subtract with overflow")
@@ -82,7 +82,7 @@ pub fn sub_old(lhs: BigNum, rhs: BigNum) -> BigNum {
 
     if rhs.exp == 0 && lhs.exp == 0 {
         // Both are in compact form, and since lhs > rhs we know we won't underflow
-        BigNum::new(lhs.base - rhs.base, 0)
+        BigNumOld::new(lhs.base - rhs.base, 0)
     } else {
         // Find how much we need to shift the smaller number to align
         let shift = if rhs.exp == 0 {
@@ -97,7 +97,7 @@ pub fn sub_old(lhs: BigNum, rhs: BigNum) -> BigNum {
                 // E.g. BigNum::new(0x8000_0000_0000_0000, 1) - BigNum::from(1)
                 // shift = 1, get_full_exp = 0, so normally we would skip
                 // But since base is at min value we need to decrease exp and normalize
-                BigNum::new(u64::MAX, lhs.exp - 1)
+                BigNumOld::new(u64::MAX, lhs.exp - 1)
             } else {
                 // Shifting will leave us with 0 so don't bother, return lhs
                 lhs
@@ -108,12 +108,12 @@ pub fn sub_old(lhs: BigNum, rhs: BigNum) -> BigNum {
             // We know that underflow won't happen, but if numbers are equal
             // we need to handle 0 case
             if res == 0 {
-                BigNum::new(0, 0)
+                BigNumOld::new(0, 0)
             } else {
                 // If new resulting base is not in range we need to fix
                 let adjustment = 63 - utils::get_exp_u64(res);
 
-                BigNum::new(res << adjustment, lhs.exp - adjustment)
+                BigNumOld::new(res << adjustment, lhs.exp - adjustment)
             }
         }
     }
@@ -124,12 +124,12 @@ fn get_pow_sum_u16(n: u16) -> Vec<u16> {
 }
 
 /// Attempt to do multiplication manually
-pub fn multi_manual(lhs: BigNum, rhs: u16) -> BigNum {
+pub fn multi_manual(lhs: BigNumOld, rhs: u16) -> BigNumOld {
     let pows = get_pow_sum_u16(rhs);
     if lhs.exp > 0 {
         // Number already in expanded form, easier
         pows.into_iter()
-            .map(|p| BigNum::new(lhs.base, lhs.exp + p as u64))
+            .map(|p| BigNumOld::new(lhs.base, lhs.exp + p as u64))
             .sum()
     } else {
         let max_pow = utils::get_exp_u64(lhs.base);
@@ -138,9 +138,9 @@ pub fn multi_manual(lhs: BigNum, rhs: u16) -> BigNum {
                 if p as u64 + max_pow > 63 {
                     let new_exp = p as u64 + max_pow - 63;
                     let new_base = lhs.base << (new_exp - 1);
-                    BigNum::new(new_base, new_exp)
+                    BigNumOld::new(new_base, new_exp)
                 } else {
-                    BigNum::new(lhs.base << p, 0)
+                    BigNumOld::new(lhs.base << p, 0)
                 }
             })
             .sum()
@@ -151,63 +151,63 @@ pub fn multi_manual(lhs: BigNum, rhs: u16) -> BigNum {
 mod tests {
     use super::*;
 
-    const A1: BigNum = BigNum::ZERO;
+    const A1: BigNumOld = BigNumOld::ZERO;
 
-    const B1: BigNum = BigNum::ONE;
-    const B2: BigNum = BigNum {
+    const B1: BigNumOld = BigNumOld::ONE;
+    const B2: BigNumOld = BigNumOld {
         base: 0x8000_0000_0000_0000,
         exp: 0,
         invalidate: false,
     };
-    const B3: BigNum = BigNum {
+    const B3: BigNumOld = BigNumOld {
         base: 0xFFFF_FFFF_FFFF_FFFF,
         exp: 0,
         invalidate: false,
     };
 
-    const C1: BigNum = BigNum {
+    const C1: BigNumOld = BigNumOld {
         base: 0x8000_0000_0000_0000,
         exp: 10,
         invalidate: false,
     };
-    const C2: BigNum = BigNum {
+    const C2: BigNumOld = BigNumOld {
         base: 0x8000_0000_0000_0000,
         exp: 73,
         invalidate: false,
     };
-    const C3: BigNum = BigNum {
+    const C3: BigNumOld = BigNumOld {
         base: 0xFFFF_FFFF_FFFF_FFFF,
         exp: 120,
         invalidate: false,
     };
-    const C4: BigNum = BigNum {
+    const C4: BigNumOld = BigNumOld {
         base: 0xFFFF_FFFF_FFFF_FFFF,
         exp: 127000,
         invalidate: false,
     };
-    const C5: BigNum = BigNum {
+    const C5: BigNumOld = BigNumOld {
         base: u64::MAX,
         exp: u64::MAX,
         invalidate: false,
     };
 
-    fn test_add(f: fn(BigNum, BigNum) -> BigNum) {
+    fn test_add(f: fn(BigNumOld, BigNumOld) -> BigNumOld) {
         // A
-        assert_eq!(f(A1, A1), BigNum::ZERO);
+        assert_eq!(f(A1, A1), BigNumOld::ZERO);
 
         // A + B -> B
-        assert_eq!(f(A1, B1), BigNum::ONE);
+        assert_eq!(f(A1, B1), BigNumOld::ONE);
 
         // B
-        assert_eq!(f(B1, B2), BigNum::new(0x8000_0000_0000_0001, 0));
+        assert_eq!(f(B1, B2), BigNumOld::new(0x8000_0000_0000_0001, 0));
 
         // B + B -> C
-        assert_eq!(f(B1, B3), BigNum::new(0x8000_0000_0000_0000, 1));
-        assert_eq!(f(B2, B3), BigNum::new(0xBFFF_FFFF_FFFF_FFFF, 1));
+        assert_eq!(f(B1, B3), BigNumOld::new(0x8000_0000_0000_0000, 1));
+        assert_eq!(f(B2, B3), BigNumOld::new(0xBFFF_FFFF_FFFF_FFFF, 1));
 
         // C
-        assert_eq!(f(C1, C2), BigNum::new(0x8000_0000_0000_0001, 73));
-        assert_eq!(f(C2, C3), BigNum::new(0x8000_0000_0000_7FFF, 121));
+        assert_eq!(f(C1, C2), BigNumOld::new(0x8000_0000_0000_0001, 73));
+        assert_eq!(f(C2, C3), BigNumOld::new(0x8000_0000_0000_7FFF, 121));
         assert_eq!(f(C3, C4), C4); // Too small to make a difference
         assert_eq!(f(C1, C3), C3);
     }

@@ -1,18 +1,18 @@
 use std::hint::black_box;
 
-use bignum::{myu128::MyU128, old_methods, BigNum};
+use bignum::{myu128::MyU128, old_methods, BigNumOld};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::{distributions::Uniform, prelude::Distribution, thread_rng};
 
-fn add_old(n: BigNum, m: BigNum) -> BigNum {
+fn add_old(n: BigNumOld, m: BigNumOld) -> BigNumOld {
     old_methods::add_old(black_box(n), black_box(m))
 }
 
-fn add_u128(n: BigNum, m: BigNum) -> BigNum {
+fn add_u128(n: BigNumOld, m: BigNumOld) -> BigNumOld {
     old_methods::add_u128(black_box(n), black_box(m))
 }
 
-fn add_curr(n: BigNum, m: BigNum) -> BigNum {
+fn add_curr(n: BigNumOld, m: BigNumOld) -> BigNumOld {
     black_box(n) + black_box(m)
 }
 
@@ -50,8 +50,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("add_old", |b| {
         b.iter(|| {
             add_old(
-                black_box(BigNum::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNum::new(0xffff_ffff_ffff_ffff, 95)),
+                black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 100)),
+                black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 95)),
             )
         })
     });
@@ -59,8 +59,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("add_u128", |b| {
         b.iter(|| {
             add_u128(
-                black_box(BigNum::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNum::new(0xffff_ffff_ffff_ffff, 95)),
+                black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 100)),
+                black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 95)),
             )
         })
     });
@@ -68,8 +68,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("add_curr", |b| {
         b.iter(|| {
             add_curr(
-                black_box(BigNum::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNum::new(0xffff_ffff_ffff_ffff, 95)),
+                black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 100)),
+                black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 95)),
             )
         })
     });

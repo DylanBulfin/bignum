@@ -1,4 +1,15 @@
 # Custom Big Numbers in Rust
+## Base-Agnostic BigNumber
+I would like to make `BigNumber` support arbitrary numeric bases. E.g. for a decimal 
+`BigNum` instead of the formula being `sig * exp^2` it would be `sig * exp^10`. I will 
+need to code binary as a special case because it's far more performant. The main 
+consideration to make for other bases is what range the base/significand can take. The
+reason math is so easy with `BigNum` values is because the significand is limited to the
+range it is. We want the difference in min and max bounds to be one order of magnitude, 
+e.g. for decimal we'd have `[10^19, 10^20)`. This raises the question of what to do with
+very large values where this is an overly restrictive range (e.g. `sqrt(u64::MAX) + 1`).
+Maybe make base a `u16`, giving a max of `65535`. 
+
 ## Inspiration
 Recently I was laying out the basics for an idle game that was starting to involve math with increasingly large numbers. 
 It made me realize how limiting `u64` and `f64`, or even their plus-sized counterparts `u128` and `f128`, can be. `u64` 

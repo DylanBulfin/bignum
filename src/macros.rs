@@ -2,99 +2,107 @@
 #[macro_export]
 macro_rules! bignum_math_impl {
     ( $t:ty ) => {
-        impl From<$t> for BigNum {
+        impl From<$t> for BigNumOld {
             fn from(n: $t) -> Self {
                 Self::new(n as u64, 0)
             }
         }
 
-        impl Add<$t> for BigNum {
+        impl Add<$t> for BigNumOld {
             type Output = Self;
 
             fn add(self, rhs: $t) -> Self::Output {
-                self + BigNum::from(rhs)
+                self + BigNumOld::from(rhs)
             }
         }
 
-        impl Add<BigNum> for $t {
-            type Output = BigNum;
+        impl Add<BigNumOld> for $t {
+            type Output = BigNumOld;
 
-            fn add(self, rhs: BigNum) -> Self::Output {
-                BigNum::from(self) + rhs
+            fn add(self, rhs: BigNumOld) -> Self::Output {
+                BigNumOld::from(self) + rhs
             }
         }
 
-        impl AddAssign<$t> for BigNum {
+        impl AddAssign<$t> for BigNumOld {
             fn add_assign(&mut self, rhs: $t) {
-                *self = *self + BigNum::from(rhs)
+                *self = *self + BigNumOld::from(rhs)
             }
         }
 
-        impl Sub<$t> for BigNum {
+        impl Sub<$t> for BigNumOld {
             type Output = Self;
 
             fn sub(self, rhs: $t) -> Self::Output {
-                self - BigNum::from(rhs)
+                self - BigNumOld::from(rhs)
             }
         }
 
-        impl Sub<BigNum> for $t {
-            type Output = BigNum;
+        impl Sub<BigNumOld> for $t {
+            type Output = BigNumOld;
 
-            fn sub(self, rhs: BigNum) -> Self::Output {
-                BigNum::from(self) - rhs
+            fn sub(self, rhs: BigNumOld) -> Self::Output {
+                BigNumOld::from(self) - rhs
             }
         }
 
-        impl SubAssign<$t> for BigNum {
+        impl SubAssign<$t> for BigNumOld {
             fn sub_assign(&mut self, rhs: $t) {
-                *self = *self - BigNum::from(rhs)
+                *self = *self - BigNumOld::from(rhs)
             }
         }
 
-        impl Mul<$t> for BigNum {
+        impl Mul<$t> for BigNumOld {
             type Output = Self;
 
             fn mul(self, rhs: $t) -> Self::Output {
-                self * BigNum::from(rhs)
+                self * BigNumOld::from(rhs)
             }
         }
 
-        impl Mul<BigNum> for $t {
-            type Output = BigNum;
+        impl Mul<BigNumOld> for $t {
+            type Output = BigNumOld;
 
-            fn mul(self, rhs: BigNum) -> Self::Output {
-                BigNum::from(self) * rhs
+            fn mul(self, rhs: BigNumOld) -> Self::Output {
+                BigNumOld::from(self) * rhs
             }
         }
 
-        impl MulAssign<$t> for BigNum {
+        impl MulAssign<$t> for BigNumOld {
             fn mul_assign(&mut self, rhs: $t) {
-                *self = *self * BigNum::from(rhs)
+                *self = *self * BigNumOld::from(rhs)
             }
         }
 
-        impl Div<$t> for BigNum {
+        impl Div<$t> for BigNumOld {
             type Output = Self;
 
             fn div(self, rhs: $t) -> Self::Output {
-                self / BigNum::from(rhs)
+                self / BigNumOld::from(rhs)
             }
         }
 
-        impl Div<BigNum> for $t {
-            type Output = BigNum;
+        impl Div<BigNumOld> for $t {
+            type Output = BigNumOld;
 
-            fn div(self, rhs: BigNum) -> Self::Output {
-                BigNum::from(self) / rhs
+            fn div(self, rhs: BigNumOld) -> Self::Output {
+                BigNumOld::from(self) / rhs
             }
         }
 
-        impl DivAssign<$t> for BigNum {
+        impl DivAssign<$t> for BigNumOld {
             fn div_assign(&mut self, rhs: $t) {
-                *self = *self / BigNum::from(rhs)
+                *self = *self / BigNumOld::from(rhs)
             }
         }
+    };
+}
 
+#[macro_export]
+macro_rules! check_bases {
+    ($lhs:ident, $rhs:ident, $mess:expr) => {
+        if $lhs.base != $rhs.base {
+            panic!("Attempt to {} BigNum values with different bases", $mess);
+        }
     };
 }
