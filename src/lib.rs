@@ -13,6 +13,7 @@ pub mod error;
 mod macros;
 pub mod myu128;
 pub mod old_methods;
+pub mod cache;
 pub mod powers;
 mod utils;
 
