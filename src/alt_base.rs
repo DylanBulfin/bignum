@@ -10,9 +10,11 @@ use std::{
 
 use crate::{
     cache::{
+        get_cached_exp_range, get_cached_mag_arbitrary, get_cached_pow, get_cached_sig_range,
         BIN_EXP_RANGE, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_SIG_RANGE, HEX_EXP_RANGE,
         HEX_POWERS, HEX_SIG_RANGE, OCT_EXP_RANGE, OCT_POWERS, OCT_SIG_RANGE,
-    }, check_bases, ensure_cached, impl_from_with_base
+    },
+    check_bases, ensure_cached, impl_from_with_base,
 };
 
 /// This trait is not recommended for use with arbitrary bases if performance is a concern
@@ -54,7 +56,6 @@ pub trait IntoWithBase<T>: Sized {
 }
 
 impl_from_with_base!(*);
-
 
 #[derive(Clone, Copy, Debug)]
 pub struct BigNum {
@@ -394,8 +395,7 @@ mod tests {
 
     use crate::{
         alt_base::{
-            get_cached_exp_range, get_cached_pow, get_cached_sig_range, BaseData, BigNum,
-            IntoWithBase,
+            get_cached_exp_range, get_cached_pow, get_cached_sig_range, BigNum, IntoWithBase,
         },
         error::{BigNumError, BigNumTestResult},
         impl_for_type,
