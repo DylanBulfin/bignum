@@ -1,11 +1,17 @@
-use std::{cmp::Ordering, ops::Add};
+use std::{
+    cmp::Ordering,
+    ops::{Add, AddAssign},
+};
+
+pub(crate) mod consts;
+pub(crate) mod error;
 
 #[derive(Clone, Copy)]
 pub struct CustomBase {
     test1: [u8; 10000000000],
 }
 
-/// This trait is used to indicate that a type is a valid base for a BigNum. It
+/// This trait is used to indicate that a type is a valid base for a BigNumBase. It
 /// contains metadata and functions that can be used to efficiently handle arbitrary
 /// bases. Importantly you must ensure the following (base is just an instance of the
 /// type, since some methods don't have static versions):
@@ -58,8 +64,8 @@ pub trait Base: Copy {
 
     /// Function that can create an instance of this Base. Users should never have to
     /// manually create instances of this type. This is called implicitly on every
-    /// call to `BigNumRed<Self>::new()` so it should be as lightweight as possible. Note
-    /// that it is not called when creating a BigNumRed<Self> from another, like when
+    /// call to `BigNumBase<Self>::new()` so it should be as lightweight as possible. Note
+    /// that it is not called when creating a BigNumBase<Self> from another, like when
     /// performing an addition. In this case it is simply copied
     fn new() -> Self;
 
@@ -165,6 +171,7 @@ impl Base for Binary {
     fn divide(&self, lhs: u64, exp: u32) -> u64 {
         lhs >> exp
     }
+
     fn multiply(&self, lhs: u64, exp: u32) -> u64 {
         lhs << exp
     }
@@ -190,6 +197,7 @@ impl Base for Octal {
     fn divide(&self, lhs: u64, exp: u32) -> u64 {
         lhs >> (3 * exp)
     }
+
     fn multiply(&self, lhs: u64, exp: u32) -> u64 {
         lhs << (3 * exp)
     }
@@ -215,6 +223,7 @@ impl Base for Hexadecimal {
     fn divide(&self, lhs: u64, exp: u32) -> u64 {
         lhs >> (exp << 2)
     }
+
     fn multiply(&self, lhs: u64, exp: u32) -> u64 {
         lhs << (exp << 2)
     }
@@ -225,7 +234,7 @@ impl Base for Hexadecimal {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct BigNumRed<T>
+pub struct BigNumBase<T>
 where
     T: Base,
 {
@@ -234,7 +243,7 @@ where
     base: T,
 }
 
-impl<T> BigNumRed<T>
+impl<T> BigNumBase<T>
 where
     T: Base,
 {
@@ -254,7 +263,10 @@ where
         } else if exp == 0 {
             Self { sig, exp, base }
         } else if sig == 0 {
-            panic!("Unable to create BigNum with exp of {} and sig of 0", exp);
+            panic!(
+                "Unable to create BigNumBase with exp of {} and sig of 0",
+                exp
+            );
         } else {
             let mag = base.get_mag(sig);
 
@@ -276,14 +288,14 @@ where
         }
     }
 
-    // Creates a BigNumRed directly from values, panicking if not possible. This is mostly
+    // Creates a BigNumBase directly from values, panicking if not possible. This is mostly
     // for testing but may be more performant on inputs that are guaranteed valid
     pub fn new_raw(sig: u64, exp: u64) -> Self {
         let base = T::new();
 
         if sig > base.max_sig() || exp != 0 && (sig > base.max_sig() || sig < base.min_sig()) {
             panic!(
-                "Unable to create BigNumRed with sig {} and exp {}",
+                "Unable to create BigNumBase with sig {} and exp {}",
                 sig, exp
             );
         } else {
@@ -292,7 +304,7 @@ where
     }
 }
 
-impl<T> PartialEq for BigNumRed<T>
+impl<T> PartialEq for BigNumBase<T>
 where
     T: Base,
 {
@@ -301,9 +313,9 @@ where
     }
 }
 
-impl<T> Eq for BigNumRed<T> where T: Base {}
+impl<T> Eq for BigNumBase<T> where T: Base {}
 
-impl<T> Ord for BigNumRed<T>
+impl<T> Ord for BigNumBase<T>
 where
     T: Base,
 {
@@ -320,7 +332,7 @@ where
     }
 }
 
-impl<T> PartialOrd for BigNumRed<T>
+impl<T> PartialOrd for BigNumBase<T>
 where
     T: Base,
 {
@@ -329,21 +341,43 @@ where
     }
 }
 
-macro_rules! impl_from_types {
+macro_rules! impl_for_types {
     ($($ty:ty),+) => {
         $(
-            impl<T> From<$ty> for BigNumRed<T> where T: Base {
+            impl<T> From<$ty> for BigNumBase<T> where T: Base {
                 fn from(value: $ty) -> Self {
                     Self::new(value as u64, 0)
+                }
+            }
+
+            impl<T> Add<$ty> for BigNumBase<T> where T: Base {
+                type Output = Self;
+
+                fn add(self, rhs: $ty) -> Self::Output {
+                    self + BigNumBase::from(rhs)
+                }
+            }
+
+            impl<T> Add<BigNumBase<T>> for $ty where T: Base {
+                type Output = BigNumBase<T>;
+
+                fn add(self, rhs: BigNumBase<T>) -> Self::Output {
+                    rhs + BigNumBase::from(self)
+                }
+            }
+
+            impl<T> AddAssign<$ty> for BigNumBase<T> where T: Base {
+                fn add_assign(&mut self, rhs: $ty) {
+                    *self = *self + BigNumBase::from(rhs);
                 }
             }
         )+
     };
 }
 
-impl_from_types!(u64, u32);
+impl_for_types!(u64, u32);
 
-impl<T> Add for BigNumRed<T>
+impl<T> Add for BigNumBase<T>
 where
     T: Base,
 {
@@ -379,12 +413,21 @@ where
     }
 }
 
+impl<T> AddAssign for BigNumBase<T>
+where
+    T: Base,
+{
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{error::BigNumTestResult, redesign::Binary};
+    use crate::{error::BigNumTestResult, Binary};
 
-    type BigNum = BigNumRed<Binary>;
+    type BigNum = BigNumBase<Binary>;
 
     #[test]
     fn new_binary_test() -> BigNumTestResult {
@@ -417,7 +460,7 @@ mod tests {
         );
         assert_eq!(
             BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1) + 0x2u32,
-            BigNum::new_raw(0x8000_0000_0000_0000)
+            BigNum::new_raw(0x8000_0000_0000_0000, 2)
         );
 
         Ok(())

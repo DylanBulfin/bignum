@@ -1,33 +1,14 @@
 use std::hint::black_box;
 
 use bignum::{
-    bignumold::{old_impl::BigNumOld, old_methods},
-    redesign::{BigNumRed, Binary},
-    BigNum,
+    //bignumold::{old_impl::BigNumOld, old_methods},
+    {BigNumBase, Binary},
 };
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::{distributions::Uniform, prelude::Distribution, thread_rng};
 
-fn bignumold_orig_add(n: BigNumOld, m: BigNumOld) -> BigNumOld {
-    old_methods::add_old(black_box(n), black_box(m))
-}
 
-fn bignumold_u128_add(n: BigNumOld, m: BigNumOld) -> BigNumOld {
-    old_methods::add_u128(black_box(n), black_box(m))
-}
-
-fn bignumold_final_add(n: BigNumOld, m: BigNumOld) -> BigNumOld {
-    black_box(n) + black_box(m)
-}
-
-fn bignum_binary_add(n: BigNum, m: BigNum) -> BigNum {
-    black_box(n) + black_box(m)
-}
-fn bignum_arbitrary_add(n: BigNum, m: BigNum) -> BigNum {
-    black_box(n) + black_box(m)
-}
-
-fn bignumred_binary_add(n: BigNumRed<Binary>, m: BigNumRed<Binary>) -> BigNumRed<Binary> {
+fn bignumred_binary_add(n: BigNumBase<Binary>, m: BigNumBase<Binary>) -> BigNumBase<Binary> {
     black_box(n) + black_box(m)
 }
 
@@ -59,24 +40,15 @@ fn criterion_benchmark(c: &mut Criterion) {
     //    })
     //});
 
-    let binary = Binary {};
     c.bench_function("BigNumRed Binary Add", |b| {
         b.iter(|| {
             bignumred_binary_add(
-                black_box(BigNumRed::new(0xffff_ffff_ffff_ffff, 100, binary)),
-                black_box(BigNumRed::new(0xffff_ffff_ffff_ffff, 95, binary)),
+                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
+                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
             )
         })
     });
 
-    c.bench_function("BigNum Binary Add", |b| {
-        b.iter(|| {
-            bignum_binary_add(
-                black_box(BigNum::new_bin(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNum::new_bin(0xffff_ffff_ffff_ffff, 95)),
-            )
-        })
-    });
     //c.bench_function("BigNum Octal Add", |b| {
     //    b.iter(|| {
     //        bignum_binary_add(
