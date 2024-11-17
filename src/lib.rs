@@ -2,6 +2,7 @@ pub mod bignumold;
 pub(crate) mod cache;
 pub mod error;
 pub mod macros;
+pub mod redesign;
 
 use std::{
     cmp::Ordering,
