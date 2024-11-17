@@ -1,22 +1,18 @@
+pub mod bignumold;
 pub(crate) mod cache;
 pub mod error;
 pub mod macros;
 
 use std::{
-    cell::RefCell,
     cmp::Ordering,
-    collections::HashMap,
-    fmt::{Debug, Display, Write},
-    ops::{Add, AddAssign, Deref, Sub},
-    sync::{LazyLock, Mutex},
+    fmt::Debug,
+    ops::{Add, AddAssign},
 };
 
-use crate::{
-    cache::{
-        get_cached_exp_range, get_cached_mag_arbitrary, get_cached_pow, get_cached_sig_range,
-        BIN_EXP_RANGE, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_SIG_RANGE, HEX_EXP_RANGE,
-        HEX_POWERS, HEX_SIG_RANGE, OCT_EXP_RANGE, OCT_POWERS, OCT_SIG_RANGE,
-    },
+use crate::cache::{
+    get_cached_exp_range, get_cached_mag_arbitrary, get_cached_pow, get_cached_sig_range,
+    BIN_EXP_RANGE, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_SIG_RANGE, HEX_EXP_RANGE,
+    HEX_POWERS, HEX_SIG_RANGE, OCT_EXP_RANGE, OCT_POWERS, OCT_SIG_RANGE,
 };
 
 /// This trait is not recommended for use with arbitrary bases if performance is a concern
@@ -332,18 +328,22 @@ impl Add for BigNum {
             return max;
         }
 
-        let result = max
-            .sig
-            .wrapping_add(min.sig.saturating_div(min.pow(shift as u32)));
+        let result = max.sig.wrapping_add(min.sig / min.pow(shift as u32));
 
         let (sig, exp) = if result < max.sig {
             // Wrapping occurred, handle it
             (self.min_sig() + (result / self.base as u64), max.exp + 1)
+        } else if self.base != 2 && result > self.max_sig() {
+            (result / self.base as u64, max.exp + 1)
         } else {
             (result, max.exp)
         };
 
-        Self::new(sig, exp, self.base)
+        Self {
+            sig,
+            exp,
+            base: self.base,
+        }
     }
 }
 
@@ -393,12 +393,9 @@ impl AddAssign for BigNum {
 #[cfg(test)]
 mod tests {
 
-    use std::u32;
-
     use crate::{
-        error::{BigNumError, BigNumTestResult},
-        impl_for_type,
-        {get_cached_exp_range, get_cached_pow, get_cached_sig_range, BigNum, IntoWithBase},
+        error::BigNumTestResult,
+        impl_for_type, {get_cached_pow, get_cached_sig_range, BigNum, IntoWithBase},
     };
 
     impl_for_type!([u8, u16, u32, u64, i8, i16, i32, i64], 2);

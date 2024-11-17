@@ -8,7 +8,6 @@ use std::{
 /// we still try to use references where it is convenient.
 #[derive(Debug)]
 pub struct BaseData {
-    base: u16,
     powers: Vec<u64>,
     sig_range: (u64, u64),
     /// These are `u32` to make `pow` calls more convenient
@@ -37,7 +36,6 @@ impl BaseData {
                 let min = max / (base as u128);
 
                 Self {
-                    base,
                     powers,
                     exp_range: (exp - 2, exp - 1),
                     sig_range: (min as u64, (max - 1) as u64),
@@ -46,34 +44,8 @@ impl BaseData {
         }
     }
 
-    pub fn sig_range(&self) -> (u64, u64) {
-        self.sig_range
-    }
-
-    pub fn exp_range(&self) -> (u32, u32) {
-        self.exp_range
-    }
-
     pub fn pow(&self, exp: u32) -> u64 {
         self.powers[exp as usize]
-    }
-
-    /// Max value for sig field, inclusive
-    pub fn max_sig(&self) -> u64 {
-        self.sig_range.1
-    }
-    /// Min value for sig field
-    pub fn min_sig(&self) -> u64 {
-        self.sig_range.0
-    }
-
-    /// Max value for exp field, inclusive
-    pub fn max_exp(&self) -> u32 {
-        self.exp_range.1
-    }
-    /// Min value for exp field
-    pub fn min_exp(&self) -> u32 {
-        self.exp_range.0
     }
 }
 pub(crate) static BASEDATA_CACHE: LazyLock<Mutex<HashMap<u16, BaseData>>> =

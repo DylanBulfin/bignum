@@ -1,9 +1,12 @@
-use crate::{utils, BigNumOld, MIN_BASE_VAL};
+use crate::bignumold::{
+    old_impl::{BigNumOld, MIN_BASE_VAL},
+    old_utils,
+};
 
 /// The exponent x such that self = c * 2^x for some c between 0 and 1
 pub fn get_full_exp(bn: BigNumOld) -> u64 {
     if bn.exp == 0 {
-        utils::get_exp_u64(bn.base)
+        old_utils::get_exp_u64(bn.base)
     } else {
         // Panics when bn.exp + 63 > u64::MAX
         bn.exp + 63
@@ -63,7 +66,7 @@ pub fn add_u128(lhs: BigNumOld, rhs: BigNumOld) -> BigNumOld {
 
     let result: u128 = (max.base as u128) + ((min.base >> shift) as u128);
 
-    if utils::get_exp_u128(result) >= 64 {
+    if old_utils::get_exp_u128(result) >= 64 {
         if max.exp == u64::MAX {
             panic!("Attempt to add BigNum with overflow");
         }
@@ -111,7 +114,7 @@ pub fn sub_old(lhs: BigNumOld, rhs: BigNumOld) -> BigNumOld {
                 BigNumOld::new(0, 0)
             } else {
                 // If new resulting base is not in range we need to fix
-                let adjustment = 63 - utils::get_exp_u64(res);
+                let adjustment = 63 - old_utils::get_exp_u64(res);
 
                 BigNumOld::new(res << adjustment, lhs.exp - adjustment)
             }
@@ -132,7 +135,7 @@ pub fn multi_manual(lhs: BigNumOld, rhs: u16) -> BigNumOld {
             .map(|p| BigNumOld::new(lhs.base, lhs.exp + p as u64))
             .sum()
     } else {
-        let max_pow = utils::get_exp_u64(lhs.base);
+        let max_pow = old_utils::get_exp_u64(lhs.base);
         pows.into_iter()
             .map(|p| {
                 if p as u64 + max_pow > 63 {

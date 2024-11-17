@@ -1,4 +1,4 @@
-use std::fmt::{self, Display, Formatter, Write};
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
 pub struct BigNumError {

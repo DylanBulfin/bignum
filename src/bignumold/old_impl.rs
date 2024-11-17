@@ -5,20 +5,13 @@ use std::{
     u64,
 };
 
+use crate::bignum_math_impl;
 use rand::distributions::uniform::{SampleBorrow, SampleUniform, UniformInt, UniformSampler};
-use utils::get_exp_u64;
 
-pub mod alt_base;
-pub mod error;
-mod macros;
-pub mod myu128;
-pub mod old_methods;
-pub mod cache;
-pub mod powers;
-mod utils;
+use super::old_utils::get_exp_u64;
 
 /// Equal to `2^63`, minimum allowed value for base in non-compact `BigNum`
-const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
+pub const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
 
 /// Representation of large number. Formula to get true value is `base * 2^exp`
 ///
@@ -40,10 +33,10 @@ const MIN_BASE_VAL: u64 = 0x8000_0000_0000_0000;
 /// ```
 #[derive(Debug, Clone, Copy, Eq)]
 pub struct BigNumOld {
-    base: u64,
-    exp: u64,
+    pub(crate) base: u64,
+    pub(crate) exp: u64,
     // This field keeps me from accidentally constructing this struct manually
-    invalidate: bool,
+    pub(crate) invalidate: bool,
 }
 
 impl BigNumOld {
@@ -304,7 +297,7 @@ impl Mul for BigNumOld {
 
     fn mul(self, rhs: BigNumOld) -> Self::Output {
         let result: u128 = self.base as u128 * rhs.base as u128;
-        let max_pow = utils::get_exp_u128(result) as u64;
+        let max_pow = super::old_utils::get_exp_u128(result) as u64;
 
         if max_pow < 64 {
             // Result is compact
@@ -338,7 +331,7 @@ impl Div for BigNumOld {
         let rhs_n = rhs.base as u128;
 
         let result = lhs_n / rhs_n;
-        let max_pow = utils::get_exp_u128(result) as u64;
+        let max_pow = super::old_utils::get_exp_u128(result) as u64;
 
         if self.exp != 0 {
             // Since self is in expanded form, when dividing by 1 we expect result's max_pow
