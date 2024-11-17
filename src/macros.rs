@@ -203,7 +203,7 @@ macro_rules! new_bignum_math_impl {
 #[macro_export]
 macro_rules! impl_for_type {
     (*, $base:literal) => {
-        impl_for_type!([u8, u16, u32, u64, i8, i16, i32, i64], $base);
+        impl_for_type!(all_ints!(), $base);
     };
     ([$($ty:ty),+], $base:literal) => {
         use std::ops::{Add, AddAssign};
@@ -245,5 +245,26 @@ macro_rules! impl_for_type {
     };
     ($base:literal, [$($ty:ty),+]) => {
         impl_for_type!([$($ty)+], $base)
+    };
+}
+
+#[macro_export]
+macro_rules! impl_from_with_base {
+    (*) => {
+        impl_from_with_base!(u8, u16, u32, u64, i8,i16, i32, i64);
+    };
+    ($($ty:ty),+) => {
+        $(
+            impl FromWithBase<$ty> for BigNum {
+                fn from_with_base(val: $ty, base: u16) -> Self {
+                    Self::new(val as u64, 0, base)
+                }
+            }
+            impl IntoWithBase<BigNum> for $ty {
+                fn into_with_base(self, base: u16) -> BigNum {
+                    BigNum::from_with_base(self, base)
+                }
+            }
+        )+
     };
 }

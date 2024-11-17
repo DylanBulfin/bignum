@@ -2,19 +2,22 @@ use std::{
     cell::RefCell,
     cmp::Ordering,
     collections::HashMap,
-    ops::{Add, AddAssign},
+    fmt::{Debug, Display, Write},
+    ops::{Add, AddAssign, Deref, Sub},
     sync::LazyLock,
     u64,
 };
 
 use crate::{
-    check_bases,
+    check_bases, impl_from_with_base,
     powers::{
         BIN_EXP_RANGE, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_SIG_RANGE, HEX_EXP_RANGE,
         HEX_POWERS, HEX_SIG_RANGE, OCT_EXP_RANGE, OCT_POWERS, OCT_SIG_RANGE,
     },
 };
 
+/// This trait is not recommended for use with arbitrary bases if performance is a concern
+/// since it involves recalculating the BaseData struct each time you create a new one.
 pub trait FromWithBase<T>: Sized {
     fn from_with_base(val: T, base: u16) -> Self;
 
@@ -32,6 +35,8 @@ pub trait FromWithBase<T>: Sized {
     }
 }
 
+/// This trait is not recommended for use with arbitrary bases if performance is a concern
+/// since it involves recalculating the BaseData struct each time you create a new one.
 pub trait IntoWithBase<T>: Sized {
     fn into_with_base(self, base: u16) -> T;
 
@@ -49,24 +54,7 @@ pub trait IntoWithBase<T>: Sized {
     }
 }
 
-macro_rules! impl_from_with_base {
-    ($($ty:ty),+) => {
-        $(
-            impl FromWithBase<$ty> for BigNum {
-                fn from_with_base(val: $ty, base: u16) -> Self {
-                    Self::new(val as u64, 0, base)
-                }
-            }
-            impl IntoWithBase<BigNum> for $ty {
-                fn into_with_base(self, base: u16) -> BigNum {
-                    BigNum::from_with_base(self, base)
-                }
-            }
-        )+
-    };
-}
-
-impl_from_with_base!(u8, u16, u32, u64, i8, i16, i32, i64);
+impl_from_with_base!(*);
 
 /// Holds runtime data for a base. This includes a table of valid powers, and ranges of
 /// the significand. This type is Copy but since it does have a non-trivial amount of data
@@ -155,7 +143,7 @@ impl BaseData {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct BigNum {
     sig: u64,
     exp: u64,
@@ -323,8 +311,12 @@ impl BigNum {
     fn new_arbitrary_raw(sig: u64, exp: u64, data: &BaseData) -> Self {
         if sig > data.max_sig() || exp != 0 && sig < data.min_sig() {
             panic!(
-                "Base-{} BigNum with sig {} and exp {} is invalid",
-                data.base, sig, exp
+                "Base-{} BigNum with sig {} and exp {} is invalid. min_sig: {}, max_sig: {}",
+                data.base,
+                sig,
+                exp,
+                data.min_sig(),
+                data.max_sig()
             );
         }
 
@@ -396,7 +388,13 @@ impl BigNum {
     }
 
     fn new_arbitrary(sig: u64, exp: u64, data: &BaseData) -> Self {
-        let (min_exp, min_sig) = (data.min_exp() as u64, data.min_sig());
+        let (min_exp, min_sig, max_sig) = (data.min_exp() as u64, data.min_sig(), data.max_sig());
+
+        let (sig, exp) = if sig > max_sig {
+            (sig / data.base, exp + 1)
+        } else {
+            (sig, exp)
+        };
 
         if exp == 0 {
             Self::new_arbitrary_raw(sig, 0, data)
@@ -444,6 +442,36 @@ impl BigNum {
             .0 as u64
             - 1
     }
+
+    /// Helper function that gets the n-th power of self's base
+    fn pow(&self, n: u32) -> u64 {
+        match self.base {
+            2 => 1 << n,
+            8 => OCT_POWERS[n as usize],
+            10 => DEC_POWERS[n as usize],
+            16 => HEX_POWERS[n as usize],
+            _ => {
+                if let Some(d) = self.data {
+                    d.pow(n)
+                } else {
+                    panic!("Unable to get BaseData for base-{} BigNum", self.base);
+                }
+            }
+        }
+    }
+}
+
+// Want to skip the data field as it's the same for every BigNum of a certain base. May
+// want to rethink the design later, moving the table to a global cache is likely more 
+// elegant
+impl Debug for BigNum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BigNum")
+            .field("sig", &self.sig)
+            .field("exp", &self.exp)
+            .field("base", &self.base)
+            .finish()
+    }
 }
 
 impl Ord for BigNum {
@@ -480,7 +508,51 @@ impl Add for BigNum {
         let (max, min) = if self > rhs { (self, rhs) } else { (rhs, self) };
         let shift = max.exp - min.exp;
 
-        let result = max.sig.wrapping_add(min.sig >> shift);
+        if shift >= self.max_exp() as u64 {
+            // This shift is guaranteed to result in 0 on lhs, no need to compute
+            return self;
+        }
+
+        let result = max
+            .sig
+            .wrapping_add(min.sig.saturating_div(min.pow(shift as u32)));
+
+        let (sig, exp) = if result < max.sig {
+            // Wrapping occurred, handle it
+            (self.min_sig() + (result / self.base as u64), max.exp + 1)
+        } else {
+            (result, max.exp)
+        };
+
+        if !self.is_special_base() {
+            Self::new_with_template(sig, exp, &self)
+        } else {
+            Self::new(sig, exp, self.base)
+        }
+    }
+}
+
+impl Sub for BigNum {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        check_bases!(self, rhs, "sub");
+
+        let (max, min) = if self >= rhs {
+            (self, rhs)
+        } else {
+            panic!("Unable to subtract {} from {}", rhs, self)
+        };
+        let shift = max.exp - min.exp;
+
+        if shift >= self.max_exp() as u64 {
+            // This shift is guaranteed to result in 0 on lhs, no need to compute
+            return self;
+        }
+
+        let result = max
+            .sig
+            .wrapping_add(min.sig.saturating_div(min.pow(shift as u32)));
 
         let (sig, exp) = if result < max.sig {
             // Wrapping occurred, handle it
@@ -505,6 +577,8 @@ impl AddAssign for BigNum {
 
 #[cfg(test)]
 mod tests {
+
+    use std::u32;
 
     use crate::{
         alt_base::{BaseData, BigNum, IntoWithBase},
@@ -608,6 +682,10 @@ mod tests {
         let data = BaseData::new(7);
 
         assert_eq!(
+            BigNum::new(0, 0, 7),
+            BigNum::new_with_template(0, 0, &template)
+        );
+        assert_eq!(
             BigNum::new(0x15, 0, 7),
             BigNum::new_with_template(0x15, 0, &template)
         );
@@ -622,6 +700,10 @@ mod tests {
         assert_eq!(
             BigNum::new(12342124098u64, 10, 7),
             BigNum::new_arbitrary_raw(12342124098u64 * data.pow(10), 0, &data)
+        );
+        assert_eq!(
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 0, 7),
+            BigNum::new_arbitrary_raw(0xFFFF_FFFF_FFFF_FFFF / data.base, 1, &data)
         );
 
         Ok(())
@@ -658,6 +740,52 @@ mod tests {
         assert_eq!(
             0xFFFF_FFFF_FFFF_FFFFu64.into_hex() + 1.into_hex(),
             BigNum::new_spec_raw(0x1000_0000_0000_0000, 1, 16)
+        );
+        assert_eq!(
+            0xFFFF_FFFF_FFFF_FFFEu64.into_hex() + 1.into_hex(),
+            BigNum::new_spec_raw(0xFFFF_FFFF_FFFF_FFFF, 0, 16)
+        );
+        assert_eq!(
+            BigNum::new_hex(0xFFFF_FFFF_FFFF_FFFEu64, 10) + 0x0100_0000_0000u64.into_hex(),
+            BigNum::new_spec_raw(0xFFFF_FFFF_FFFF_FFFF, 10, 16)
+        );
+        assert_eq!(
+            BigNum::new_hex(0xFFFF_FFFF_FFFF_FFFFu64, 0xFFFF_FFFF_FFFF_0000)
+                + 0x0100_0000_0000u64.into_hex(),
+            BigNum::new_spec_raw(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF_FFFF_0000, 16)
+        );
+        assert_eq!(
+            BigNum::new_hex(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF)
+                + BigNum::new_hex(0x1FFF_FFFF_FFFF_FFFF, 0xFFFF_FFF0),
+            BigNum::new_spec_raw(0x1000_0000_0000_0000, 0x1_0000_0000, 16)
+        );
+        assert_eq!(
+            BigNum::new_hex(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF)
+                + BigNum::new_hex(0x1FFF_FFFF_FFFF_FFFF, 0xFFFF_FFEF),
+            BigNum::new_spec_raw(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF, 16)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_arbitrary_test() -> BigNumTestResult {
+        let data = BaseData::new(61);
+        assert_eq!(
+            0xFFFF_FFFF_FFFF_FFFEu64.into_with_base(61) + 1.into_with_base(61),
+            BigNum::new_arbitrary_raw(((u64::MAX as u128 + 1) / 61) as u64, 1, &data)
+        );
+        assert_eq!(
+            1u64.into_with_base(61) + 1.into_with_base(61),
+            BigNum::new_arbitrary_raw(2, 0, &data)
+        );
+        assert_eq!(
+            BigNum::new(data.max_sig(), 10, 61) + BigNum::new(1, 10, 61),
+            BigNum::new_arbitrary_raw(data.min_sig(), 11, &data)
+        );
+        assert_eq!(
+            BigNum::new(data.max_sig(), 10, 61) + BigNum::new(61, 9, 61),
+            BigNum::new_arbitrary_raw(data.min_sig(), 10, &data)
         );
 
         Ok(())
