@@ -1,13 +1,72 @@
-use std::{cell::RefCell, cmp::Ordering, collections::HashMap, ops::Add, sync::LazyLock, u64};
+use std::{
+    cell::RefCell,
+    cmp::Ordering,
+    collections::HashMap,
+    ops::{Add, AddAssign},
+    sync::LazyLock,
+    u64,
+};
 
 use crate::{
     check_bases,
-    error::BigNumResult,
     powers::{
         BIN_EXP_RANGE, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_SIG_RANGE, HEX_EXP_RANGE,
         HEX_POWERS, HEX_SIG_RANGE, OCT_EXP_RANGE, OCT_POWERS, OCT_SIG_RANGE,
     },
 };
+
+pub trait FromWithBase<T>: Sized {
+    fn from_with_base(val: T, base: u16) -> Self;
+
+    fn from_bin(val: T) -> Self {
+        Self::from_with_base(val, 2)
+    }
+    fn from_oct(val: T) -> Self {
+        Self::from_with_base(val, 8)
+    }
+    fn from_dec(val: T) -> Self {
+        Self::from_with_base(val, 10)
+    }
+    fn from_hex(val: T) -> Self {
+        Self::from_with_base(val, 16)
+    }
+}
+
+pub trait IntoWithBase<T>: Sized {
+    fn into_with_base(self, base: u16) -> T;
+
+    fn into_bin(self) -> T {
+        self.into_with_base(2)
+    }
+    fn into_oct(self) -> T {
+        self.into_with_base(8)
+    }
+    fn into_dec(self) -> T {
+        self.into_with_base(10)
+    }
+    fn into_hex(self) -> T {
+        self.into_with_base(16)
+    }
+}
+
+macro_rules! impl_from_with_base {
+    ($($ty:ty),+) => {
+        $(
+            impl FromWithBase<$ty> for BigNum {
+                fn from_with_base(val: $ty, base: u16) -> Self {
+                    Self::new(val as u64, 0, base)
+                }
+            }
+            impl IntoWithBase<BigNum> for $ty {
+                fn into_with_base(self, base: u16) -> BigNum {
+                    BigNum::from_with_base(self, base)
+                }
+            }
+        )+
+    };
+}
+
+impl_from_with_base!(u8, u16, u32, u64, i8, i16, i32, i64);
 
 /// Holds runtime data for a base. This includes a table of valid powers, and ranges of
 /// the significand. This type is Copy but since it does have a non-trivial amount of data
@@ -118,7 +177,7 @@ impl BigNum {
     /// silently so keep that in mind when using it. If you pass a non-special base it
     /// will calculate the table from scratch. When creating a BigNum with a certain base
     /// when you already have a BigNum of the same base, you should probably use
-    /// `new_with_template`
+    /// `new_with_template` as it avoids recalculating the metadata values in BaseData
     pub fn new(sig: u64, exp: u64, base: u16) -> Self {
         match base {
             2 => Self::new_bin(sig, exp),
@@ -126,7 +185,7 @@ impl BigNum {
             _ => {
                 let data = BaseData::new(base);
 
-                Self::new_arbitrary(sig, exp, base, &data)
+                Self::new_arbitrary(sig, exp, &data)
             }
         }
     }
@@ -140,20 +199,83 @@ impl BigNum {
         Self::new(sig, exp, 16)
     }
 
-    pub fn new_with_template(sig: u64, exp: u64, base: u16, temp: &Self) -> Self {
-        match base {
+    pub fn new_with_template(sig: u64, exp: u64, temp: &Self) -> Self {
+        match temp.base {
             2 | 8 | 10 | 16 => panic!(
-                "Calling new_with_template with special base {} is invalid.",
-                base
+                "Calling new_with_template with special temp.base {} is invalid.",
+                temp.base
             ),
             _ => Self::new_arbitrary(
                 sig,
                 exp,
-                base,
                 &temp.data.unwrap_or_else(|| {
-                    panic!("Unable to get data from BigNum with base {}", temp.base)
+                    panic!(
+                        "Unable to get data from BigNum with temp.base {}",
+                        temp.base
+                    )
                 }),
             ),
+        }
+    }
+
+    pub fn is_special_base(&self) -> bool {
+        matches!(self.base, 2 | 8 | 10 | 16)
+    }
+
+    pub fn min_sig(&self) -> u64 {
+        match self.base {
+            2 => BIN_SIG_RANGE.0,
+            8 => OCT_SIG_RANGE.0,
+            10 => DEC_SIG_RANGE.0,
+            16 => HEX_SIG_RANGE.0,
+            _ => self
+                .data
+                .unwrap_or_else(|| {
+                    panic!("Unable to get BaseData for value with base {}", self.base)
+                })
+                .min_sig(),
+        }
+    }
+    pub fn max_sig(&self) -> u64 {
+        match self.base {
+            2 => BIN_SIG_RANGE.1,
+            8 => OCT_SIG_RANGE.1,
+            10 => DEC_SIG_RANGE.1,
+            16 => HEX_SIG_RANGE.1,
+            _ => self
+                .data
+                .unwrap_or_else(|| {
+                    panic!("Unable to get BaseData for value with base {}", self.base)
+                })
+                .max_sig(),
+        }
+    }
+    pub fn min_exp(&self) -> u32 {
+        match self.base {
+            2 => BIN_EXP_RANGE.0,
+            8 => OCT_EXP_RANGE.0,
+            10 => DEC_EXP_RANGE.0,
+            16 => HEX_EXP_RANGE.0,
+            _ => self
+                .data
+                .unwrap_or_else(|| {
+                    panic!("Unable to get BaseData for value with base {}", self.base)
+                })
+                .min_exp(),
+        }
+    }
+    pub fn max_exp(&self) -> u32 {
+        match self.base {
+            2 => BIN_EXP_RANGE.1,
+            8 => OCT_EXP_RANGE.1,
+            10 => DEC_EXP_RANGE.1,
+            16 => HEX_EXP_RANGE.1,
+            _ => self
+                .data
+                .unwrap_or_else(|| {
+                    panic!("Unable to get BaseData for value with base {}", self.base)
+                })
+                .max_exp(),
         }
     }
 
@@ -198,18 +320,18 @@ impl BigNum {
         }
     }
 
-    fn new_arbitrary_raw(sig: u64, exp: u64, base: u16, data: &BaseData) -> Self {
+    fn new_arbitrary_raw(sig: u64, exp: u64, data: &BaseData) -> Self {
         if sig > data.max_sig() || exp != 0 && sig < data.min_sig() {
             panic!(
                 "Base-{} BigNum with sig {} and exp {} is invalid",
-                base, sig, exp
+                data.base, sig, exp
             );
         }
 
         Self {
             sig,
             exp,
-            base,
+            base: data.base as u16,
             data: Some(*data),
         }
     }
@@ -273,22 +395,27 @@ impl BigNum {
         }
     }
 
-    fn new_arbitrary(sig: u64, exp: u64, base: u16, data: &BaseData) -> Self {
+    fn new_arbitrary(sig: u64, exp: u64, data: &BaseData) -> Self {
         let (min_exp, min_sig) = (data.min_exp() as u64, data.min_sig());
 
         if exp == 0 {
-            Self::new_arbitrary_raw(sig, 0, base, data)
+            Self::new_arbitrary_raw(sig, 0, data)
+        } else if sig == 0 {
+            panic!(
+                "Unable to create a base-{} BigNum with exp of {} and sig of {}",
+                data.base, exp, sig
+            );
         } else if sig >= min_sig {
-            Self::new_arbitrary_raw(sig, exp, base, data)
+            Self::new_arbitrary_raw(sig, exp, data)
         } else {
-            let mag = Self::get_mag_arbitrary(sig, base, data);
+            let mag = Self::get_mag_arbitrary(sig, data);
 
             if mag.saturating_add(exp) < min_exp {
-                Self::new_arbitrary_raw(sig * data.pow(exp as u32), 0, base, data)
+                Self::new_arbitrary_raw(sig * data.pow(exp as u32), 0, data)
             } else {
                 let adj = min_exp - mag;
 
-                Self::new_arbitrary_raw(sig * data.pow(adj as u32), exp - adj, base, data)
+                Self::new_arbitrary_raw(sig * data.pow(adj as u32), exp - adj, data)
             }
         }
     }
@@ -303,12 +430,17 @@ impl BigNum {
         }
     }
 
-    fn get_mag_arbitrary(sig: u64, base: u16, data: &BaseData) -> u64 {
+    fn get_mag_arbitrary(sig: u64, data: &BaseData) -> u64 {
         data.powers
             .iter()
             .enumerate()
-            .find(|(_, v)| sig > v.unwrap())
-            .unwrap_or_else(|| panic!("Unable to find base-{} magnitude for value {}", base, sig))
+            .find(|(_, v)| sig < v.unwrap())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Unable to find base-{} magnitude for value {}",
+                    data.base, sig
+                )
+            })
             .0 as u64
             - 1
     }
@@ -350,21 +482,47 @@ impl Add for BigNum {
 
         let result = max.sig.wrapping_add(min.sig >> shift);
 
-        if result < max.sig {
-            // Wrapping occurred, handle this
-            Self::new_bin((1 << 63) + (result >> 1), max.exp + 1)
+        let (sig, exp) = if result < max.sig {
+            // Wrapping occurred, handle it
+            (self.min_sig() + (result / self.base as u64), max.exp + 1)
         } else {
-            Self::new_bin(result, max.exp)
+            (result, max.exp)
+        };
+
+        if !self.is_special_base() {
+            Self::new_with_template(sig, exp, &self)
+        } else {
+            Self::new(sig, exp, self.base)
         }
+    }
+}
+
+impl AddAssign for BigNum {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
     }
 }
 
 #[cfg(test)]
 mod tests {
+
     use crate::{
-        alt_base::BigNum,
+        alt_base::{BaseData, BigNum, IntoWithBase},
         error::{BigNumError, BigNumTestResult},
+        impl_for_type,
     };
+
+    impl_for_type!([u8, u16, u32, u64, i8, i16, i32, i64], 2);
+
+    #[test]
+    fn from_test() -> BigNumTestResult {
+        assert_eq!(BigNum::from(1u64), BigNum::new_bin_raw(1, 0));
+        assert_eq!(BigNum::from(12234u16), BigNum::new_bin_raw(12234, 0));
+        assert_eq!(BigNum::from(200i32), BigNum::new_bin_raw(200, 0));
+        assert_eq!(BigNum::from(100i8), BigNum::new_bin_raw(100, 0));
+
+        Ok(())
+    }
 
     #[test]
     fn new_bin_test() -> BigNumTestResult {
@@ -445,6 +603,31 @@ mod tests {
     }
 
     #[test]
+    fn new_arbitrary_test() -> BigNumTestResult {
+        let template = BigNum::new(0, 0, 7);
+        let data = BaseData::new(7);
+
+        assert_eq!(
+            BigNum::new(0x15, 0, 7),
+            BigNum::new_with_template(0x15, 0, &template)
+        );
+        assert_eq!(
+            BigNum::new(0xFFFF_FFFF, 14, 7),
+            BigNum::new_with_template(0xFFFF_FFFF, 14, &template),
+        );
+        assert_eq!(
+            BigNum::new(124092, 2, 7),
+            BigNum::new_arbitrary_raw(124092 * 49, 0, &data),
+        );
+        assert_eq!(
+            BigNum::new(12342124098u64, 10, 7),
+            BigNum::new_arbitrary_raw(12342124098u64 * data.pow(10), 0, &data)
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn add_binary_test() -> BigNumTestResult {
         assert_eq!(
             BigNum::new(0x100, 0, 2) + BigNum::new(0x0100_0000, 4, 2),
@@ -457,6 +640,24 @@ mod tests {
         assert_eq!(
             BigNum::new(0xFFFF_FFFF, 32, 2) + BigNum::new(0x8000_0000, 1, 2),
             BigNum::new_spec_raw(0x8000_0000_0000_0000, 1, 2)
+        );
+        assert_eq!(
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1, 2) + 0x1u32,
+            BigNum::new_spec_raw(0xFFFF_FFFF_FFFF_FFFF, 1, 2)
+        );
+        assert_eq!(
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1, 2) + 0x2u32,
+            BigNum::new_spec_raw(0x8000_0000_0000_0000, 2, 2)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_hex_test() -> BigNumTestResult {
+        assert_eq!(
+            0xFFFF_FFFF_FFFF_FFFFu64.into_hex() + 1.into_hex(),
+            BigNum::new_spec_raw(0x1000_0000_0000_0000, 1, 16)
         );
 
         Ok(())
