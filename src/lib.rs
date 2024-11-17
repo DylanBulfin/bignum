@@ -118,23 +118,32 @@ impl BigNum {
             return Self::new_bin_spec(sig, exp);
         }
 
-        let (min_exp, min_sig, powers) = match base {
+        let (min_exp, min_sig, max_sig, powers) = match base {
             8 => (
                 OCT_EXP_RANGE.0 as u64,
                 OCT_SIG_RANGE.0,
+                OCT_SIG_RANGE.1,
                 OCT_POWERS.as_slice(),
             ),
             10 => (
                 DEC_EXP_RANGE.0 as u64,
                 DEC_SIG_RANGE.0,
+                DEC_SIG_RANGE.1,
                 DEC_POWERS.as_slice(),
             ),
             16 => (
                 HEX_EXP_RANGE.0 as u64,
                 HEX_SIG_RANGE.0,
+                HEX_SIG_RANGE.1,
                 HEX_POWERS.as_slice(),
             ),
             _ => panic!("Invalid special base: {}", base),
+        };
+
+        let (sig, exp) = if sig > max_sig {
+            (sig / base as u64, exp + 1)
+        } else {
+            (sig, exp)
         };
 
         if exp == 0 {
@@ -144,7 +153,7 @@ impl BigNum {
         } else {
             let mag = Self::get_mag_spec(sig, base);
 
-            if mag.saturating_add(exp) < min_exp {
+            if mag.saturating_add(exp) <= min_exp {
                 Self::new_spec_raw(sig * powers[exp as usize], 0, base)
             } else {
                 let adj = min_exp - mag;
