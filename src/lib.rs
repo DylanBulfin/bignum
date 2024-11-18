@@ -876,6 +876,8 @@ max_exp:
         create_and_test_base!(*; Base7890, 7890);
         create_and_test_base!(*; Base1357, 1357);
         create_and_test_base!(*; Base2468, 2468);
+        create_and_test_base!(*; Base65535, 65535);
+        create_and_test_base!(*; Ternary, 3);
 
         base_agnostic_tests!(*; Octal);
         base_agnostic_tests!(*; Decimal);
