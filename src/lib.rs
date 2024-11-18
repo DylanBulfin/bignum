@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    ops::{Add, AddAssign, Sub},
+    ops::{Add, AddAssign, Sub, SubAssign},
 };
 
 use consts::{
@@ -152,11 +152,13 @@ pub trait Base: Copy + Debug {
         if Self::NUMBER.is_power_of_two() {
             // This is a special case where sig_max = u64::MAX. We have to handle it
             // specially to avoid overflowing the u64
-            let exp = u64::MAX.ilog(Self::NUMBER as u64);
+            let pow = Self::NUMBER.ilog2();
+            let exp = 64 / pow;
+            let sig = Self::pow(exp - 1);
 
             (
                 ExpRange(exp - 1, exp),
-                SigRange(Self::pow(exp - 1), u64::MAX),
+                SigRange(sig, Self::multiply(sig, 1) - 1),
             )
         } else {
             let exp = u64::MAX.ilog(Self::NUMBER as u64);
@@ -352,8 +354,17 @@ where
             Self { sig, exp, base }
         } else {
             panic!(
-                "Unable to create BigNumBase with sig {} and exp {}",
-                sig, exp
+                "Unable to create BigNumBase with sig 
+{:x} and exp 
+{}
+min_sig:
+{:x},
+max_sig:
+{:x}",
+                sig,
+                exp,
+                base.sig_range().0,
+                base.sig_range().1
             );
         }
     }
@@ -404,7 +415,7 @@ where
 
     // Returns true if the values are valid for the current base
     pub fn is_valid(sig: u64, exp: u64, range: SigRange) -> bool {
-        !(sig > range.max() || exp != 0 && sig < range.min())
+        sig <= range.max() && (exp == 0 || sig >= range.min())
     }
 }
 
@@ -443,40 +454,6 @@ where
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
-}
-
-macro_rules! impl_for_types {
-    ($($ty:ty),+) => {
-        $(
-            impl<T> From<$ty> for BigNumBase<T> where T: Base {
-                fn from(value: $ty) -> Self {
-                    Self::new(value as u64, 0)
-                }
-            }
-
-            impl<T> Add<$ty> for BigNumBase<T> where T: Base {
-                type Output = Self;
-
-                fn add(self, rhs: $ty) -> Self::Output {
-                    self + BigNumBase::from(rhs)
-                }
-            }
-
-            impl<T> Add<BigNumBase<T>> for $ty where T: Base {
-                type Output = BigNumBase<T>;
-
-                fn add(self, rhs: BigNumBase<T>) -> Self::Output {
-                    rhs + BigNumBase::from(self)
-                }
-            }
-
-            impl<T> AddAssign<$ty> for BigNumBase<T> where T: Base {
-                fn add_assign(&mut self, rhs: $ty) {
-                    *self = *self + BigNumBase::from(rhs);
-                }
-            }
-        )+
-    };
 }
 
 impl_for_types!(u64, u32, i32);
@@ -546,14 +523,14 @@ where
                 "Attempt to subtract 
 {:?} from 
 {:?}",
-                self, rhs
+                rhs, self
             )
         };
 
         let shift = max.exp - min.exp;
 
         if shift >= max_exp as u64 {
-            // This shift is guaranteed to result in 0 on lhs, no need to compute
+            // This shift is guaranteed to result in 0 on rhs, no need to compute
             return max;
         }
 
@@ -566,7 +543,13 @@ where
             (result, max.exp)
         };
 
-        if res_exp == 0 || res_sig >= min_sig {
+        if res_sig == 0 {
+            Self {
+                sig: 0,
+                exp: 0,
+                base,
+            }
+        } else if res_exp == 0 || res_sig >= min_sig {
             Self {
                 sig: res_sig,
                 exp: res_exp,
@@ -578,12 +561,20 @@ where
             let mag = T::get_mag(res_sig);
             let adj = min_exp - mag;
 
-            if adj as u64 >= res_exp {
+            if adj as u64 == res_exp {
+                Self {
+                    sig: T::multiply(res_sig, adj),
+                    exp: 0,
+                    base,
+                }
+            } else if adj as u64 >= res_exp {
                 // Have to adjust by more than exp so we will have a compact result
-                let diff = adj - res_exp as u32;
+                // TODO Verify this again, pretty sure it's right but I can't figure out
+                // why the -1 is there
+                let diff = adj as u64 - res_exp - 1;
 
                 Self {
-                    sig: T::multiply(res_sig, diff),
+                    sig: T::multiply(res_sig, diff as u32),
                     exp: 0,
                     base,
                 }
@@ -598,41 +589,83 @@ where
     }
 }
 
+impl<T> SubAssign for BigNumBase<T>
+where
+    T: Base,
+{
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{error::BigNumTestResult, Binary};
 
-    type BigNum = BigNumBase<Binary>;
+    // Overriding it for better error messages
+    macro_rules! assert_eq_bignum {
+        ($lhs:expr, $rhs:expr) => {
+            if $lhs != $rhs {
+                panic!("assertion failed: 
+sig:
+0x{:x} 
+vs
+0x{:x}
+
+exp:
+{}
+vs
+{}
+
+base:
+{}
+
+min_sig:
+0x{:x}
+max_sig:
+0x{:x}
+min_exp:
+{}
+max_exp:
+{}
+"
+            , $lhs.sig,
+            $rhs.sig, $lhs.exp, $rhs.exp, $lhs.base.as_number(), $lhs.base.sig_range().min(), $lhs.base.sig_range().max(), $lhs.base.exp_range().min(), $lhs.base.exp_range().max());
+            }
+        };
+    }
 
     #[test]
     fn new_binary_test() {
+        type BigNum = BigNumBase<Binary>;
         // Check that adjustment is correct, especially around edge cases
-        assert_eq!(BigNum::new(1, 0), BigNum::new_raw(1, 0));
-        assert_eq!(BigNum::new(0b100, 2), BigNum::new_raw(0b10000, 0));
-        assert_eq!(BigNum::new(1 << 62, 20), BigNum::new_raw(1 << 63, 19));
-        assert_eq!(BigNum::new(1 << 62, 20), BigNum::new_raw(1 << 63, 19));
+        assert_eq_bignum!(BigNum::new(1, 0), BigNum::new_raw(1, 0));
+        assert_eq_bignum!(BigNum::new(0b100, 2), BigNum::new_raw(0b10000, 0));
+        assert_eq_bignum!(BigNum::new(1 << 62, 20), BigNum::new_raw(1 << 63, 19));
+        assert_eq_bignum!(BigNum::new(1 << 62, 20), BigNum::new_raw(1 << 63, 19));
     }
 
     #[test]
     fn add_binary_test() {
-        assert_eq!(
+        type BigNum = BigNumBase<Binary>;
+        assert_eq_bignum!(
             BigNum::new(0x100, 0) + BigNum::new(0x0100_0000, 4),
             BigNum::new_raw(0x1000_0100, 0)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0x1000_0000, 32) + BigNum::new(0x0100_0000, 4),
             BigNum::new_raw(0x1000_0000_1000_0000, 0)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0xFFFF_FFFF, 32) + BigNum::new(0x8000_0000, 1),
             BigNum::new_raw(0x8000_0000_0000_0000, 1)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1) + 0x1u32,
             BigNum::new_raw(0xFFFF_FFFF_FFFF_FFFF, 1)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1) + 0x2u32,
             BigNum::new_raw(0x8000_0000_0000_0000, 2)
         );
@@ -641,28 +674,28 @@ mod tests {
     #[test]
     fn add_hex_test() {
         type BigNum = BigNumBase<Hexadecimal>;
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::from(0xFFFF_FFFF_FFFF_FFFFu64) + 1u32,
             BigNum::new_raw(0x1000_0000_0000_0000, 1)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::from(0xFFFF_FFFF_FFFF_FFFEu64) + 1u32,
             BigNum::new_raw(0xFFFF_FFFF_FFFF_FFFF, 0)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0xFFFF_FFFF_FFFF_FFFEu64, 10) + 0x0100_0000_0000u64,
             BigNum::new_raw(0xFFFF_FFFF_FFFF_FFFF, 10)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0xFFFF_FFFF_FFFF_FFFFu64, 0xFFFF_FFFF_FFFF_0000) + 0x0100_0000_0000u64,
             BigNum::new_raw(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF_FFFF_0000)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF)
                 + BigNum::new(0x1FFF_FFFF_FFFF_FFFF, 0xFFFF_FFF0),
             BigNum::new_raw(0x1000_0000_0000_0000, 0x1_0000_0000)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF)
                 + BigNum::new(0x1FFF_FFFF_FFFF_FFFF, 0xFFFF_FFEF),
             BigNum::new_raw(0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF)
@@ -673,15 +706,15 @@ mod tests {
     fn add_decimal_test() {
         type BigNum = BigNumBase<Decimal>;
 
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::from(1) + BigNum::new(1243123123, 3),
             BigNum::new_raw(1243123123001, 0)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::from(1000) + BigNum::new(10u64.pow(19) - 1, 3),
             BigNum::new_raw(10u64.pow(18), 4)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(10u64.pow(19) - 1, 13) + BigNum::new(10u64.pow(18), 3),
             BigNum::new_raw(10u64.pow(18) + 10u64.pow(7) - 1, 14)
         );
@@ -694,19 +727,114 @@ mod tests {
 
         let SigRange(min_sig, max_sig) = Base61::calculate_ranges().1;
 
-        assert_eq!(
-            BigNum::from(0xFFFF_FFFF_FFFF_FFFEu64) + 1,
+        assert_eq_bignum!(
+            BigNum::from(0xFFFF_FFFF_FFFF_FFFEu64) + 1u64,
             BigNum::new_raw(((u64::MAX as u128 + 1) / 61u128) as u64, 1)
         );
-        assert_eq!(BigNum::from(1u64) + 1, BigNum::new_raw(2, 0));
-        assert_eq!(
+        assert_eq_bignum!(BigNum::from(1u64) + 1u64, BigNum::new_raw(2, 0));
+        assert_eq_bignum!(
             //BigNum::new(max_sig, 10, BASE) + BigNum::new(1, 10, BASE),
             BigNum::new(max_sig, 10) + BigNum::new(1, 10),
             BigNum::new_raw(min_sig, 11)
         );
-        assert_eq!(
+        assert_eq_bignum!(
             BigNum::new(max_sig, 10) + BigNum::new(61u64, 9),
             BigNum::new_raw(min_sig, 11)
         );
+    }
+
+    #[test]
+    fn sub_binary_test() {
+        type BigNum = BigNumBase<Binary>;
+
+        assert_eq_bignum!(
+            BigNum::new(0x100, 32) - BigNum::new(0x0080_0000_0000, 0),
+            BigNum::new_raw(0x0080_0000_0000, 0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(0x1000_0000_0000_0000, 0) - BigNum::new(0x0010_0000_0000_0000, 8),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 48) - BigNum::new(0x8000_0000_0000_0000, 16),
+            BigNum::new(0xFFFF_FFFF_7FFF_FFFF, 48)
+        );
+        assert_eq_bignum!(
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 48) - BigNum::new(0xFFFF_FFFF_0000_0000, 48),
+            BigNum::new(0xFFFF_FFFF_0000_0000, 16)
+        );
+        assert_eq_bignum!(
+            BigNum::new(0x8000_0000_0000_0000, 48) - BigNum::new(0xFFFF_FFFF_0000_0000, 16),
+            BigNum::new(0xFFFF_FFFE_0000_0002, 47)
+        );
+    }
+
+    // Runs some non-base specific tests
+    macro_rules! base_agnostic_tests {
+        (add $base:ident) => {{
+            type BigNum = BigNumBase<$base>;
+            let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
+
+            assert_eq_bignum!(
+                BigNum::new(min_sig, 1) - $base::NUMBER as u64,
+                BigNum::new_raw(max_sig - ($base::NUMBER as u64 - 1), 0)
+            );
+            assert_eq_bignum!(
+                BigNum::new(max_sig, 1) - max_sig,
+                BigNum::new_raw(max_sig - max_sig / $base::NUMBER as u64, 1)
+            );
+            assert_eq_bignum!(
+                BigNum::new(12341098709128730491, 11234) - BigNum::new(12341098709128730491, 11234),
+                BigNum::from(0)
+            );
+            assert_eq_bignum!(
+                BigNum::from(max_sig) - BigNum::from(max_sig),
+                BigNum::from(0)
+            );
+        }};
+    }
+
+    macro_rules! create_and_test_base {
+        (add $base:ident, $num:literal) => {
+            create_default_base!($base, $num);
+            base_agnostic_tests!(add $base);
+        };
+    }
+
+    // I won't test each individual base since the logic is the same, but I will test
+    // binary and arbitrary
+    #[test]
+    fn sub_arbitrary_test() {
+        create_default_base!(Base61, 61);
+        type BigNum = BigNumBase<Base61>;
+
+        let SigRange(min_sig, max_sig) = Base61::calculate_ranges().1;
+
+        // This is an example of how subtraction results in a loss of precision. I may
+        // do a lossless_sub trait at some point that casts both sigs to u128 before
+        // calculating
+
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) - 61u64,
+            BigNum::new_raw(max_sig - 60, 0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 1) - max_sig,
+            BigNum::new_raw(max_sig - max_sig / 61, 1)
+        );
+        assert_eq_bignum!(
+            BigNum::new(12341098709128730491, 11234) - BigNum::new(12341098709128730491, 11234),
+            BigNum::from(0)
+        )
+    }
+
+    #[test]
+    fn add_many_test() {
+        create_and_test_base!(add Base61, 61);
+        create_and_test_base!(add Base11142, 11142);
+        create_and_test_base!(add Base942, 942);
+        create_and_test_base!(add Base3292, 3292);
+        base_agnostic_tests!(add Octal);
+        base_agnostic_tests!(add Decimal);
     }
 }

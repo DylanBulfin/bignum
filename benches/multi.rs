@@ -16,7 +16,7 @@ use rand::{distributions::Uniform, prelude::Distribution, thread_rng};
 create_default_base!(Base61, 61);
 create_default_base!(Base300, 300);
 
-macro_rules! do_rand_test {
+macro_rules! do_rand_add_test {
     (
         base = $base:ident,
         low = $low:expr,
@@ -47,8 +47,38 @@ macro_rules! do_rand_test {
     };
 }
 
+macro_rules! do_rand_sub_test {
+    (
+        base = $base:ident,
+        low = $low:expr,
+        high = $high:expr,
+    ) => {
+        type BigNum = BigNumBase<$base>;
+        let min_exp = $base::new().exp_range().min() as u32;
+
+        let rand: Uniform<BigNum> = Uniform::new_inclusive($low, $high);
+        let rng = &mut thread_rng();
+
+        // Need the custom BigNum to be strictly greater than the one we get from rand,
+        // so we restrict it to a valid sig range.
+        let sig_dist: Uniform<u64> = Uniform::new_inclusive(1 << 63, u64::MAX);
+        let exp_diff_dist: Uniform<u32> = Uniform::new_inclusive(1, min_exp);
+
+        let vals = black_box(from_fn(|| Some(rand.sample(rng))).take(1000)).collect::<Vec<_>>();
+
+        for val in vals {
+            let rhs = BigNum::new(
+                sig_dist.sample(rng),
+                val.exp + exp_diff_dist.sample(rng) as u64,
+            );
+
+            let _ = rhs - val;
+        }
+    };
+}
+
 fn bignumred_binary_add_rand() {
-    do_rand_test!(
+    do_rand_add_test!(
         base = Binary,
         low = BigNum::from(0),
         high = BigNum::new(u64::MAX, u64::MAX),
@@ -56,7 +86,7 @@ fn bignumred_binary_add_rand() {
 }
 
 fn bignumred_decimal_add_rand() {
-    do_rand_test!(
+    do_rand_add_test!(
         base = Decimal,
         low = BigNum::from(0),
         high = BigNum::new(10u64.pow(19) - 1, u64::MAX),
@@ -64,7 +94,7 @@ fn bignumred_decimal_add_rand() {
 }
 
 fn bignumred_hexadecimal_add_rand() {
-    do_rand_test!(
+    do_rand_add_test!(
         base = Hexadecimal,
         low = BigNum::from(0),
         high = BigNum::new(u64::MAX, u64::MAX),
@@ -72,7 +102,7 @@ fn bignumred_hexadecimal_add_rand() {
 }
 
 fn bignumred_binary_add_rand_lim() {
-    do_rand_test!(
+    do_rand_add_test!(
         base = Binary,
         low = BigNum::from(0),
         high = BigNum::from(u64::MAX),
@@ -80,20 +110,26 @@ fn bignumred_binary_add_rand_lim() {
 }
 
 fn bignumred_decimal_add_rand_lim() {
-    do_rand_test!(
+    do_rand_add_test!(
         base = Decimal,
         low = BigNum::from(0),
         high = BigNum::from(10u64.pow(19) - 1),
     );
 }
 
-#[allow(arithmetic_overflow)]
 fn bignumred_hexadecimal_add_rand_lim() {
-    do_rand_test!(
+    do_rand_add_test!(
         base = Hexadecimal,
         low = BigNum::from(0),
-        //high = BigNum::from(u64::MAX + 1),
-        high = BigNum::from(u64::MAX + 1),
+        high = BigNum::from(u64::MAX),
+    );
+}
+
+fn bignumred_binary_sub_rand() {
+    do_rand_sub_test!(
+        base = Binary,
+        low = BigNum::from(0),
+        high = BigNum::new(u64::MAX, u64::MAX),
     );
 }
 
@@ -118,8 +154,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     //    b.iter(bignumred_decimal_add_rand_lim)
     //});
 
-    c.bench_function("BigNum Hexadecimal Add Rand Limited", |b| {
-        b.iter(bignumred_hexadecimal_add_rand_lim)
+    //c.bench_function("BigNum Hexadecimal Add Rand Limited", |b| {
+    //    b.iter(bignumred_hexadecimal_add_rand_lim)
+    //});
+    //
+
+    c.bench_function("BigNum Binary Sub Rand", |b| {
+        b.iter(bignumred_binary_sub_rand)
     });
 }
 

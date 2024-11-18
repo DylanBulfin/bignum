@@ -1,5 +1,61 @@
 use crate::{Base, ExpRange, SigRange};
 
+#[macro_export]
+macro_rules! impl_for_types {
+    ($($ty:ty),+) => {
+        $(
+            impl<T> From<$ty> for BigNumBase<T> where T: Base {
+                fn from(value: $ty) -> Self {
+                    Self::new(value as u64, 0)
+                }
+            }
+
+            impl<T> Add<$ty> for BigNumBase<T> where T: Base {
+                type Output = Self;
+
+                fn add(self, rhs: $ty) -> Self::Output {
+                    self + BigNumBase::from(rhs)
+                }
+            }
+
+            impl<T> Add<BigNumBase<T>> for $ty where T: Base {
+                type Output = BigNumBase<T>;
+
+                fn add(self, rhs: BigNumBase<T>) -> Self::Output {
+                    rhs + BigNumBase::from(self)
+                }
+            }
+
+            impl<T> AddAssign<$ty> for BigNumBase<T> where T: Base {
+                fn add_assign(&mut self, rhs: $ty) {
+                    *self = *self + BigNumBase::from(rhs);
+                }
+            }
+
+            impl<T> Sub<$ty> for BigNumBase<T> where T: Base {
+                type Output = Self;
+
+                fn sub(self, rhs: $ty) -> Self::Output {
+                    self - BigNumBase::from(rhs)
+                }
+            }
+
+            impl<T> Sub<BigNumBase<T>> for $ty where T: Base {
+                type Output = BigNumBase<T>;
+
+                fn sub(self, rhs: BigNumBase<T>) -> Self::Output {
+                    BigNumBase::from(self) - rhs
+                }
+            }
+
+            impl<T> SubAssign<$ty> for BigNumBase<T> where T: Base {
+                fn sub_assign(&mut self, rhs: $ty) {
+                    *self = *self - BigNumBase::from(rhs);
+                }
+            }
+        )+
+    };
+}
 
 #[macro_export]
 macro_rules! create_default_base {
