@@ -149,17 +149,14 @@ pub trait Base: Copy + Debug {
     /// to store the ranges in a const and return them directly in the `exp_range` and
     /// `sig_range` methods if convenient.
     fn calculate_ranges() -> (ExpRange, SigRange) {
-        if Self::NUMBER.is_power_of_two() {
+        if Self::NUMBER.is_power_of_two() && Self::NUMBER.ilog2().is_power_of_two() {
             // This is a special case where sig_max = u64::MAX. We have to handle it
             // specially to avoid overflowing the u64
             let pow = Self::NUMBER.ilog2();
             let exp = 64 / pow;
             let sig = Self::pow(exp - 1);
 
-            (
-                ExpRange(exp - 1, exp),
-                SigRange(sig, Self::multiply(sig, 1) - 1),
-            )
+            (ExpRange(exp - 1, exp), SigRange(sig, u64::MAX))
         } else {
             let exp = u64::MAX.ilog(Self::NUMBER as u64);
             (
@@ -771,7 +768,11 @@ max_exp:
 
     // Runs some non-base specific tests
     macro_rules! base_agnostic_tests {
-        (add $base:ident) => {{
+        (*; $base:ident) => {{
+            base_agnostic_tests!(add $base);
+            base_agnostic_tests!(sub $base);
+        }};
+        (sub $base:ident) => {{
             type BigNum = BigNumBase<$base>;
             let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
 
@@ -792,9 +793,39 @@ max_exp:
                 BigNum::from(0)
             );
         }};
+        (add $base:ident) => {{
+            type BigNum = BigNumBase<$base>;
+            let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
+
+            assert_eq_bignum!(
+                BigNum::new(min_sig, 1) + $base::NUMBER as u64,
+                BigNum::new_raw(min_sig + 1, 1)
+            );
+            assert_eq_bignum!(
+                BigNum::new(max_sig, 1) + $base::NUMBER as u64,
+                BigNum::new_raw(min_sig, 2)
+            );
+            assert_eq_bignum!(
+                BigNum::from(min_sig) + BigNum::from(min_sig),
+                BigNum::from(min_sig * 2)
+            );
+            assert_eq_bignum!(
+                BigNum::new(max_sig, 142) + BigNum::new(min_sig, 140),
+                BigNum::new(min_sig + $base::divide(max_sig, 4), 143)
+            );
+        }};
     }
 
     macro_rules! create_and_test_base {
+        (*; $base:ident, $num:literal) => {
+            create_default_base!($base, $num);
+            base_agnostic_tests!(sub $base);
+            base_agnostic_tests!(add $base);
+        };
+        (sub $base:ident, $num:literal) => {
+            create_default_base!($base, $num);
+            base_agnostic_tests!(sub $base);
+        };
         (add $base:ident, $num:literal) => {
             create_default_base!($base, $num);
             base_agnostic_tests!(add $base);
@@ -829,12 +860,24 @@ max_exp:
     }
 
     #[test]
-    fn add_many_test() {
-        create_and_test_base!(add Base61, 61);
-        create_and_test_base!(add Base11142, 11142);
-        create_and_test_base!(add Base942, 942);
-        create_and_test_base!(add Base3292, 3292);
-        base_agnostic_tests!(add Octal);
-        base_agnostic_tests!(add Decimal);
+    fn sub_many_test() {
+        // Not doing Binary or Hex since these tests assume max_sig + 1 fits in u64
+        create_and_test_base!(*; Base61, 61);
+        create_and_test_base!(*; Base11142, 11142);
+        create_and_test_base!(*; Base942, 942);
+        create_and_test_base!(*; Base3292, 3292);
+        create_and_test_base!(*; Base1234, 1234);
+        create_and_test_base!(*; Base5678, 5678);
+        create_and_test_base!(*; Base9101, 9101);
+        create_and_test_base!(*; Base2345, 2345);
+        create_and_test_base!(*; Base6789, 6789);
+        create_and_test_base!(*; Base1112, 1112);
+        create_and_test_base!(*; Base3456, 3456);
+        create_and_test_base!(*; Base7890, 7890);
+        create_and_test_base!(*; Base1357, 1357);
+        create_and_test_base!(*; Base2468, 2468);
+
+        base_agnostic_tests!(*; Octal);
+        base_agnostic_tests!(*; Decimal);
     }
 }
