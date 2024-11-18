@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    ops::{Add, AddAssign},
+    ops::{Add, AddAssign, Sub},
 };
 
 use consts::{
@@ -339,6 +339,28 @@ where
     /// this unless you have a specific need
     pub fn new(sig: u64, exp: u64) -> Self {
         let base = T::new();
+
+        Self::new_with_base(sig, exp, base)
+    }
+
+    /// Creates a BigNumBase directly from values, panicking if not possible. This is mostly
+    /// for testing but may be more performant on inputs that are guaranteed valid
+    pub fn new_raw(sig: u64, exp: u64) -> Self {
+        let base = T::new();
+
+        if Self::is_valid(sig, exp, base.sig_range()) {
+            Self { sig, exp, base }
+        } else {
+            panic!(
+                "Unable to create BigNumBase with sig {} and exp {}",
+                sig, exp
+            );
+        }
+    }
+
+    // This is a helper function that creates a BigNumBase from values and a base. It
+    // shouldn't be called directly, but is used by other internal methods
+    fn new_with_base(sig: u64, exp: u64, base: T) -> Self {
         let SigRange(min_sig, max_sig) = base.sig_range();
         let ExpRange(min_exp, _) = base.exp_range();
 
@@ -377,21 +399,6 @@ where
                     base,
                 }
             }
-        }
-    }
-
-    /// Creates a BigNumBase directly from values, panicking if not possible. This is mostly
-    /// for testing but may be more performant on inputs that are guaranteed valid
-    pub fn new_raw(sig: u64, exp: u64) -> Self {
-        let base = T::new();
-
-        if Self::is_valid(sig, exp, base.sig_range()) {
-            Self { sig, exp, base }
-        } else {
-            panic!(
-                "Unable to create BigNumBase with sig {} and exp {}",
-                sig, exp
-            );
         }
     }
 
@@ -521,6 +528,76 @@ where
     }
 }
 
+impl<T> Sub for BigNumBase<T>
+where
+    T: Base,
+{
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        let base = self.base;
+        let SigRange(min_sig, max_sig) = base.sig_range();
+        let ExpRange(min_exp, max_exp) = base.exp_range();
+
+        let (max, min) = if self >= rhs {
+            (self, rhs)
+        } else {
+            panic!(
+                "Attempt to subtract 
+{:?} from 
+{:?}",
+                self, rhs
+            )
+        };
+
+        let shift = max.exp - min.exp;
+
+        if shift >= max_exp as u64 {
+            // This shift is guaranteed to result in 0 on lhs, no need to compute
+            return max;
+        }
+
+        let result = max.sig.wrapping_sub(T::divide(min.sig, shift as u32));
+
+        let (res_sig, res_exp) = if result > max.sig {
+            // Wrapping occurred, handle it by decrementing the exponent
+            (result, max.exp - 1)
+        } else {
+            (result, max.exp)
+        };
+
+        if res_exp == 0 || res_sig >= min_sig {
+            Self {
+                sig: res_sig,
+                exp: res_exp,
+                base,
+            }
+        } else {
+            // This operation can result in arbitrary loss in magnitude so we have to
+            // calculate the differential directly
+            let mag = T::get_mag(res_sig);
+            let adj = min_exp - mag;
+
+            if adj as u64 >= res_exp {
+                // Have to adjust by more than exp so we will have a compact result
+                let diff = adj - res_exp as u32;
+
+                Self {
+                    sig: T::multiply(res_sig, diff),
+                    exp: 0,
+                    base,
+                }
+            } else {
+                Self {
+                    sig: T::multiply(res_sig, adj),
+                    exp: res_exp - adj as u64,
+                    base,
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -599,6 +676,14 @@ mod tests {
         assert_eq!(
             BigNum::from(1) + BigNum::new(1243123123, 3),
             BigNum::new_raw(1243123123001, 0)
+        );
+        assert_eq!(
+            BigNum::from(1000) + BigNum::new(10u64.pow(19) - 1, 3),
+            BigNum::new_raw(10u64.pow(18), 4)
+        );
+        assert_eq!(
+            BigNum::new(10u64.pow(19) - 1, 13) + BigNum::new(10u64.pow(18), 3),
+            BigNum::new_raw(10u64.pow(18) + 10u64.pow(7) - 1, 14)
         );
     }
 

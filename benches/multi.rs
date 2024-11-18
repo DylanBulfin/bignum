@@ -59,7 +59,7 @@ fn bignumred_decimal_add_rand() {
     do_rand_test!(
         base = Decimal,
         low = BigNum::from(0),
-        high = BigNum::new(10u64.pow(21) - 1, u64::MAX),
+        high = BigNum::new(10u64.pow(19) - 1, u64::MAX),
     );
 }
 
@@ -83,15 +83,17 @@ fn bignumred_decimal_add_rand_lim() {
     do_rand_test!(
         base = Decimal,
         low = BigNum::from(0),
-        high = BigNum::from(10u64.pow(21) - 1),
+        high = BigNum::from(10u64.pow(19) - 1),
     );
 }
 
+#[allow(arithmetic_overflow)]
 fn bignumred_hexadecimal_add_rand_lim() {
     do_rand_test!(
         base = Hexadecimal,
         low = BigNum::from(0),
-        high = BigNum::from(u64::MAX),
+        //high = BigNum::from(u64::MAX + 1),
+        high = BigNum::from(u64::MAX + 1),
     );
 }
 
@@ -99,11 +101,11 @@ fn criterion_benchmark(c: &mut Criterion) {
     //c.bench_function("BigNum Binary Add Rand", |b| {
     //    b.iter(bignumred_binary_add_rand)
     //});
-    //
+
     //c.bench_function("BigNum Decimal Add Rand", |b| {
     //    b.iter(bignumred_decimal_add_rand)
     //});
-    //
+
     //c.bench_function("BigNum Hexadecimal Add Rand", |b| {
     //    b.iter(bignumred_hexadecimal_add_rand)
     //});
@@ -115,7 +117,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     //c.bench_function("BigNum Decimal Add Rand Limited", |b| {
     //    b.iter(bignumred_decimal_add_rand_lim)
     //});
-    
+
     c.bench_function("BigNum Hexadecimal Add Rand Limited", |b| {
         b.iter(bignumred_hexadecimal_add_rand_lim)
     });

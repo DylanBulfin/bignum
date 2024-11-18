@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use rand::{
     distributions::uniform::{SampleBorrow, SampleUniform, UniformInt, UniformSampler},
     Rng,
@@ -28,10 +30,10 @@ where
     {
         let (low, high) = (*low.borrow(), *high.borrow());
 
-        if low == high {
-            panic!("Unable to create non-inclusive range with high == low");
-        } else if low > high {
-            panic!("Unable to create non-inclusive range with low > high");
+        match low.cmp(&high) {
+            Ordering::Less => (),
+            Ordering::Greater => panic!("Unable to create non-inclusive range with low > high"),
+            Ordering::Equal => panic!("Unable to create non-inclusive range with low == high"),
         }
 
         Self {
@@ -49,10 +51,8 @@ where
     {
         let (low, high) = (*low.borrow(), *high.borrow());
 
-        if low == high {
-            panic!("Unable to create non-inclusive range with high == low");
-        } else if low > high {
-            panic!("Unable to create non-inclusive range with low > high");
+        if low > high {
+            panic!("Unable to create non-inclusive range with low > high")
         }
 
         Self {

@@ -1,4 +1,6 @@
 use bignum::BigNumBase;
+use bignum::Binary;
+use rand::distributions::Uniform;
 
 fn calculate_ranges(base: u16) -> ((u32, u32), (u64, u64)) {
     let mut powers = vec![];
@@ -19,6 +21,4 @@ fn calculate_ranges(base: u16) -> ((u32, u32), (u64, u64)) {
     ((exp - 2, exp - 1), (min as u64, (max - 1) as u64))
 }
 
-fn main() {
-    println!("{:?}", calculate_ranges(61));
-}
+fn main() {}

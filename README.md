@@ -55,6 +55,15 @@ at once (e.g. if your code uses one decimal BigNum and a custom base-61 BigNum)
     bases
 
 ### Binary/Hexadecimal performance
+There was something very weird going on with the Decimal test. I made a macro that does
+tests and called it with an operation that normally overflows (`10u64.pow(21)` because I
+misremembered the `sig_max` value). I've confirmed that tests do indeed abort on panic.
+So there's something about calling a macro within a criterion test function that
+implicitly ignores numeric overflow which is bizarre. I'm unable to reproduce it in 
+`main.rs` so it must be something about either the criterion harness itself (e.g.
+module-wide `#[allow(arithmetic_overflow)]`) or the way it calls the test function. I've
+updated the results that were affected by this.
+
 To test using a const table for Binary exponentiation I added some new tests that involve 
 generating 1000 random numbers and adding them. The results for Binary, Decimal, and Hex,
 and involved running them all separately to avoid cache collisions, etc.
@@ -79,7 +88,7 @@ that limited the magnitude differential. The results below (tests were run toget
 | Test             | Average(us) |
 |------------------|-------------|
 | Binary Add       | 19.172      | 
-| Decimal Add      | 28.396      |
+| Decimal Add      | 30.403      |
 | Hexadecimal Add  | 16.338      |
 
 Following this I also wrote up some tests that limited the random range to compact
@@ -87,7 +96,7 @@ numbers, e.g. those where `exp == 0`
 | Test             | Average(us) |
 |------------------|-------------|
 | Binary Add       | 13.629      | 
-| Decimal Add      | 19.314      |
+| Decimal Add      | 26.015      |
 | Hexadecimal Add  | 13.471      |
 The above indicates that I was right about the cause of the disparity, as removing calls
 to `new` gets rid of it almost entirely. Additionally, the results were the same whether
