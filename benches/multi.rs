@@ -1,8 +1,9 @@
-use std::hint::black_box;
+use std::{hint::black_box, iter::from_fn};
 
 use bignum::{
     //bignumold::{old_impl::BigNumOld, old_methods},
     create_default_base,
+    Base,
     BigNumBase,
     Binary,
     Decimal,
@@ -15,151 +16,109 @@ use rand::{distributions::Uniform, prelude::Distribution, thread_rng};
 create_default_base!(Base61, 61);
 create_default_base!(Base300, 300);
 
-fn bignumred_binary_add(n: BigNumBase<Binary>, m: BigNumBase<Binary>) -> BigNumBase<Binary> {
-    black_box(n) + black_box(m)
+macro_rules! do_rand_test {
+    (
+        base = $base:ident,
+        low = $low:expr,
+        high = $high:expr,
+    ) => {
+        type BigNum = BigNumBase<$base>;
+        let min_exp = $base::new().exp_range().min() as i32;
+
+        let rand: Uniform<BigNum> = Uniform::new_inclusive($low, $high);
+        let rng = &mut thread_rng();
+
+        let sig_dist: Uniform<u64> = Uniform::new_inclusive(0, u64::MAX);
+        let exp_diff_dist: Uniform<i32> = Uniform::new_inclusive(-min_exp, min_exp);
+
+        let vals = black_box(from_fn(|| Some(rand.sample(rng))).take(1000)).collect::<Vec<_>>();
+
+        for val in vals {
+            let exp_diff: i32 = exp_diff_dist.sample(rng);
+
+            let rhs = if exp_diff < 0 {
+                BigNum::new(sig_dist.sample(rng), val.exp - ((-exp_diff) as u64))
+            } else {
+                BigNum::new(sig_dist.sample(rng), val.exp + exp_diff as u64)
+            };
+
+            let _ = val + rhs;
+        }
+    };
 }
 
-fn bignumred_octal_add(n: BigNumBase<Octal>, m: BigNumBase<Octal>) -> BigNumBase<Octal> {
-    black_box(n) + black_box(m)
+fn bignumred_binary_add_rand() {
+    do_rand_test!(
+        base = Binary,
+        low = BigNum::from(0),
+        high = BigNum::new(u64::MAX, u64::MAX),
+    );
 }
 
-fn bignumred_decimal_add(n: BigNumBase<Decimal>, m: BigNumBase<Decimal>) -> BigNumBase<Decimal> {
-    black_box(n) + black_box(m)
+fn bignumred_decimal_add_rand() {
+    do_rand_test!(
+        base = Decimal,
+        low = BigNum::from(0),
+        high = BigNum::new(10u64.pow(21) - 1, u64::MAX),
+    );
 }
 
-fn bignumred_hexadecimal_add(
-    n: BigNumBase<Hexadecimal>,
-    m: BigNumBase<Hexadecimal>,
-) -> BigNumBase<Hexadecimal> {
-    black_box(n) + black_box(m)
+fn bignumred_hexadecimal_add_rand() {
+    do_rand_test!(
+        base = Hexadecimal,
+        low = BigNum::from(0),
+        high = BigNum::new(u64::MAX, u64::MAX),
+    );
 }
 
-fn bignumred_arbitrary_add(n: BigNumBase<Base61>, m: BigNumBase<Base61>) -> BigNumBase<Base61> {
-    black_box(n) + black_box(m)
+fn bignumred_binary_add_rand_lim() {
+    do_rand_test!(
+        base = Binary,
+        low = BigNum::from(0),
+        high = BigNum::from(u64::MAX),
+    );
 }
-fn bignumred_arbitrary_add2(n: BigNumBase<Base300>, m: BigNumBase<Base300>) -> BigNumBase<Base300> {
-    black_box(n) + black_box(m)
+
+fn bignumred_decimal_add_rand_lim() {
+    do_rand_test!(
+        base = Decimal,
+        low = BigNum::from(0),
+        high = BigNum::from(10u64.pow(21) - 1),
+    );
+}
+
+fn bignumred_hexadecimal_add_rand_lim() {
+    do_rand_test!(
+        base = Hexadecimal,
+        low = BigNum::from(0),
+        high = BigNum::from(u64::MAX),
+    );
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    //c.bench_function("BigNumOld Original Add", |b| {
-    //    b.iter(|| {
-    //        bignumold_orig_add(
-    //            black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
+    //c.bench_function("BigNum Binary Add Rand", |b| {
+    //    b.iter(bignumred_binary_add_rand)
     //});
     //
-    //c.bench_function("BigNumOld U128 Add", |b| {
-    //    b.iter(|| {
-    //        bignumold_u128_add(
-    //            black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
+    //c.bench_function("BigNum Decimal Add Rand", |b| {
+    //    b.iter(bignumred_decimal_add_rand)
     //});
     //
-    //c.bench_function("BigNumOld Final Add", |b| {
-    //    b.iter(|| {
-    //        bignumold_final_add(
-    //            black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumOld::new(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
+    //c.bench_function("BigNum Hexadecimal Add Rand", |b| {
+    //    b.iter(bignumred_hexadecimal_add_rand)
     //});
 
-    c.bench_function("BigNum Binary Add", |b| {
-        b.iter(|| {
-            bignumred_binary_add(
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
-            )
-        })
-    });
-    c.bench_function("BigNum Octal Add", |b| {
-        b.iter(|| {
-            bignumred_octal_add(
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
-            )
-        })
-    });
-    c.bench_function("BigNum Decimal Add", |b| {
-        b.iter(|| {
-            bignumred_decimal_add(
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
-            )
-        })
-    });
-    c.bench_function("BigNum Hexadecimal Add", |b| {
-        b.iter(|| {
-            bignumred_hexadecimal_add(
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
-            )
-        })
-    });
-    //c.bench_function("BigNum Arbitrary Add", |b| {
-    //    b.iter(|| {
-    //        bignumred_arbitrary_add(
-    //            black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
-    //});
-    c.bench_function("BigNum Arbitrary Add2", |b| {
-        b.iter(|| {
-            bignumred_arbitrary_add2(
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
-                black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
-            )
-        })
-    });
-
-    //c.bench_function("BigNum Binary Add", |b| {
-    //    b.iter(|| {
-    //        bignumred_binary_add(
-    //            black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumBase::new(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
+    //c.bench_function("BigNum Binary Add Rand Limited", |b| {
+    //    b.iter(bignumred_binary_add_rand_lim)
     //});
 
-    //c.bench_function("BigNumSecond Octal Add", |b| {
-    //    b.iter(|| {
-    //        bignum_binary_add(
-    //            black_box(BigNumSecond::new_oct(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumSecond::new_oct(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
+    //c.bench_function("BigNum Decimal Add Rand Limited", |b| {
+    //    b.iter(bignumred_decimal_add_rand_lim)
     //});
-    //c.bench_function("BigNumSecond Decimal Add", |b| {
-    //    b.iter(|| {
-    //        bignum_binary_add(
-    //            black_box(BigNumSecond::new_dec(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumSecond::new_dec(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
-    //});
-    //c.bench_function("BigNumSecond Hexadecimal Add", |b| {
-    //    b.iter(|| {
-    //        bignum_binary_add(
-    //            black_box(BigNumSecond::new_hex(0xffff_ffff_ffff_ffff, 100)),
-    //            black_box(BigNumSecond::new_hex(0xffff_ffff_ffff_ffff, 95)),
-    //        )
-    //    })
-    //});
-    //
-    //c.bench_function("BigNumSecond Arbitrary Add", |b| {
-    //    b.iter(|| {
-    //        bignum_binary_add(
-    //            black_box(BigNumSecond::new(0xffff_ffff_ffff_ffff, 100, 53)),
-    //            black_box(BigNumSecond::new(0xffff_ffff_ffff_ffff, 95, 53)),
-    //        )
-    //    })
-    //});
+    
+    c.bench_function("BigNum Hexadecimal Add Rand Limited", |b| {
+        b.iter(bignumred_hexadecimal_add_rand_lim)
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);
