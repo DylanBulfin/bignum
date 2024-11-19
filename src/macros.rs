@@ -88,6 +88,74 @@ macro_rules! create_default_base {
     };
 }
 
+// Runs some non-base specific tests
+#[macro_export]
+macro_rules! test_base {
+    (*; $base:ident) => {{
+        test_base!(add $base);
+        test_base!(sub $base);
+    }};
+    (sub $base:ident) => {{
+        type BigNum = BigNumBase<$base>;
+        let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
+
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) - $base::NUMBER as u64,
+            BigNum::new_raw(max_sig - ($base::NUMBER as u64 - 1), 0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 1) - max_sig,
+            BigNum::new_raw(max_sig - max_sig / $base::NUMBER as u64, 1)
+        );
+        assert_eq_bignum!(
+            BigNum::new(12341098709128730491, 11234) - BigNum::new(12341098709128730491, 11234),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::from(max_sig) - BigNum::from(max_sig),
+            BigNum::from(0)
+        );
+    }};
+    (add $base:ident) => {{
+        type BigNum = BigNumBase<$base>;
+        let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
+
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) + $base::NUMBER as u64,
+            BigNum::new_raw(min_sig + 1, 1)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 1) + $base::NUMBER as u64,
+            BigNum::new_raw(min_sig, 2)
+        );
+        assert_eq_bignum!(
+            BigNum::from(min_sig) + BigNum::from(min_sig),
+            BigNum::from(min_sig * 2)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 142) + BigNum::new(min_sig, 140),
+            BigNum::new(min_sig + $base::divide(max_sig, 4), 143)
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! create_and_test_base {
+    (*; $base:ident, $num:literal) => {
+        create_default_base!($base, $num);
+        test_base!(sub $base);
+        test_base!(add $base);
+    };
+    (sub $base:ident, $num:literal) => {
+        create_default_base!($base, $num);
+        test_base!(sub $base);
+    };
+    (add $base:ident, $num:literal) => {
+        create_default_base!($base, $num);
+        test_base!(add $base);
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Base;

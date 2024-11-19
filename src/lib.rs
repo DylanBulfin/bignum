@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    ops::{Add, AddAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Mul, Sub, SubAssign},
 };
 
 use consts::{
@@ -595,6 +595,22 @@ where
     }
 }
 
+impl<T> Mul for BigNumBase<T> where T: Base {
+    type Output = BigNumBase<T>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let base = self.base;
+        let (lhs, rhs) = (self.sig as u128, rhs.sig as u128);
+        let SigRange(min_sig, max_sig) = base.sig_range();
+
+        let res = lhs * rhs;
+
+        if res > max_sig as u128 {
+            let mag = T::get_mag(sig)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -766,72 +782,6 @@ max_exp:
         );
     }
 
-    // Runs some non-base specific tests
-    macro_rules! base_agnostic_tests {
-        (*; $base:ident) => {{
-            base_agnostic_tests!(add $base);
-            base_agnostic_tests!(sub $base);
-        }};
-        (sub $base:ident) => {{
-            type BigNum = BigNumBase<$base>;
-            let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
-
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 1) - $base::NUMBER as u64,
-                BigNum::new_raw(max_sig - ($base::NUMBER as u64 - 1), 0)
-            );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 1) - max_sig,
-                BigNum::new_raw(max_sig - max_sig / $base::NUMBER as u64, 1)
-            );
-            assert_eq_bignum!(
-                BigNum::new(12341098709128730491, 11234) - BigNum::new(12341098709128730491, 11234),
-                BigNum::from(0)
-            );
-            assert_eq_bignum!(
-                BigNum::from(max_sig) - BigNum::from(max_sig),
-                BigNum::from(0)
-            );
-        }};
-        (add $base:ident) => {{
-            type BigNum = BigNumBase<$base>;
-            let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
-
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 1) + $base::NUMBER as u64,
-                BigNum::new_raw(min_sig + 1, 1)
-            );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 1) + $base::NUMBER as u64,
-                BigNum::new_raw(min_sig, 2)
-            );
-            assert_eq_bignum!(
-                BigNum::from(min_sig) + BigNum::from(min_sig),
-                BigNum::from(min_sig * 2)
-            );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 142) + BigNum::new(min_sig, 140),
-                BigNum::new(min_sig + $base::divide(max_sig, 4), 143)
-            );
-        }};
-    }
-
-    macro_rules! create_and_test_base {
-        (*; $base:ident, $num:literal) => {
-            create_default_base!($base, $num);
-            base_agnostic_tests!(sub $base);
-            base_agnostic_tests!(add $base);
-        };
-        (sub $base:ident, $num:literal) => {
-            create_default_base!($base, $num);
-            base_agnostic_tests!(sub $base);
-        };
-        (add $base:ident, $num:literal) => {
-            create_default_base!($base, $num);
-            base_agnostic_tests!(add $base);
-        };
-    }
-
     // I won't test each individual base since the logic is the same, but I will test
     // binary and arbitrary
     #[test]
@@ -879,7 +829,7 @@ max_exp:
         create_and_test_base!(*; Base65535, 65535);
         create_and_test_base!(*; Ternary, 3);
 
-        base_agnostic_tests!(*; Octal);
-        base_agnostic_tests!(*; Decimal);
+        test_base!(*; Octal);
+        test_base!(*; Decimal);
     }
 }
