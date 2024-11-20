@@ -65,3 +65,32 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{assert_eq_bignum, create_default_base, BigNumBase, Binary};
+
+    // Other tests are in the normal macro so we can test it with many different bases
+
+    #[test]
+    fn test_succ() {
+        type BigNum = BigNumBase<Binary>;
+        let SigRange(min_sig, max_sig) = Binary::calculate_ranges().1;
+
+        assert_eq_bignum!(BigNum::new(0, 0).succ(), BigNum::new(1, 0));
+        assert_eq_bignum!(BigNum::new(max_sig, 0).succ(), BigNum::new(min_sig, 1));
+        assert_eq_bignum!(BigNum::new(max_sig, 1).succ(), BigNum::new(min_sig, 2));
+    }
+
+    #[test]
+    fn test_pred() {
+        type BigNum = BigNumBase<Binary>;
+        let SigRange(min_sig, max_sig) = Binary::calculate_ranges().1;
+
+        assert_eq_bignum!(BigNum::new(1, 0).pred(), BigNum::new(0, 0));
+        assert_eq_bignum!(BigNum::new(min_sig, 1).pred(), BigNum::new(max_sig, 0));
+        assert_eq_bignum!(BigNum::new(min_sig, 2).pred(), BigNum::new(max_sig, 1));
+
+    }
+}

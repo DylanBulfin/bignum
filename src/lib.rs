@@ -814,39 +814,6 @@ mod tests {
     use super::*;
     use crate::{error::BigNumTestResult, Binary};
 
-    // Overriding it for better error messages
-    macro_rules! assert_eq_bignum {
-        ($lhs:expr, $rhs:expr) => {
-            if $lhs != $rhs {
-                panic!("assertion failed: 
-sig:
-0x{:x} 
-vs
-0x{:x}
-
-exp:
-{}
-vs
-{}
-
-base:
-{}
-
-min_sig:
-0x{:x}
-max_sig:
-0x{:x}
-min_exp:
-{}
-max_exp:
-{}
-"
-            , $lhs.sig,
-            $rhs.sig, $lhs.exp, $rhs.exp, $lhs.base.as_number(), $lhs.base.sig_range().min(), $lhs.base.sig_range().max(), $lhs.base.exp_range().min(), $lhs.base.exp_range().max());
-            }
-        };
-    }
-
     #[test]
     fn new_binary_test() {
         type BigNum = BigNumBase<Binary>;
@@ -1044,27 +1011,14 @@ max_exp:
     }
 
     #[test]
-    fn test_many_bases() {
-        // Not doing Binary or Hex since these tests assume max_sig + 1 fits in u64
-        create_and_test_base!(*; Base61, 61);
-        create_and_test_base!(*; Base11142, 11142);
-        create_and_test_base!(*; Base942, 942);
-        create_and_test_base!(*; Base3292, 3292);
-        create_and_test_base!(*; Base1234, 1234);
-        create_and_test_base!(*; Base5678, 5678);
-        create_and_test_base!(*; Base9101, 9101);
-        create_and_test_base!(*; Base2345, 2345);
-        create_and_test_base!(*; Base6789, 6789);
-        create_and_test_base!(*; Base1112, 1112);
-        create_and_test_base!(*; Base3456, 3456);
-        create_and_test_base!(*; Base7890, 7890);
-        create_and_test_base!(*; Base1357, 1357);
-        create_and_test_base!(*; Base2468, 2468);
-        create_and_test_base!(*; Base65535, 65535);
-        create_and_test_base!(*; Ternary, 3);
+    fn binary_div_test() {
+        type BigNum = BigNumBase<Binary>;
+        let SigRange(min_sig, max_sig) = Binary::calculate_ranges().1;
 
-        test_base!(*; Octal);
-        test_base!(*; Decimal);
+        assert_eq_bignum!(
+            BigNum::from(123412341234432u64) / BigNum::from(1221314),
+            BigNum::from(123412341234432u64 / 1221314)
+        );
     }
 
     #[test]
@@ -1084,5 +1038,29 @@ max_exp:
             BigNum::new(u64::MAX, 100) >> 105,
             BigNum::new(u64::MAX / 32, 0)
         );
+    }
+
+    #[test]
+    fn test_many_bases() {
+        // Not doing Binary or Hex since these tests assume max_sig + 1 fits in u64
+        create_and_test_base!(Base61, 61);
+        create_and_test_base!(Base11142, 11142);
+        create_and_test_base!(Base942, 942);
+        create_and_test_base!(Base3292, 3292);
+        create_and_test_base!(Base1234, 1234);
+        create_and_test_base!(Base5678, 5678);
+        create_and_test_base!(Base9101, 9101);
+        create_and_test_base!(Base2345, 2345);
+        create_and_test_base!(Base6789, 6789);
+        create_and_test_base!(Base1112, 1112);
+        create_and_test_base!(Base3456, 3456);
+        create_and_test_base!(Base7890, 7890);
+        create_and_test_base!(Base1357, 1357);
+        create_and_test_base!(Base2468, 2468);
+        create_and_test_base!(Base65535, 65535);
+        create_and_test_base!(Ternary, 3);
+
+        test_base!(Octal);
+        test_base!(Decimal);
     }
 }
