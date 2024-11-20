@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, Mul, MulAssign, Shl, Shr, Sub, SubAssign},
 };
 
 use consts::{
@@ -13,6 +13,7 @@ pub(crate) mod consts;
 pub(crate) mod error;
 pub mod macros;
 pub mod random;
+pub mod traits;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ExpRange(u32, u32);
@@ -705,6 +706,109 @@ where
     }
 }
 
+impl<T> Div for BigNumBase<T>
+where
+    T: Base,
+{
+    type Output = Self;
+
+    // The basic idea here is to project both numbers to a u128 like in multiplication,
+    // but this time the lhs goes in the upper 64 bits and the rhs goes in the lower. This
+    // way we preserve as much info as possible
+    fn div(self, rhs: Self) -> Self::Output {
+        match self.cmp(&rhs) {
+            Ordering::Less => return Self::new(0, 0),
+            Ordering::Equal => return Self::new(1, 0),
+            _ => (),
+        }
+
+        let base = self.base;
+        let ExpRange(min_exp, max_exp) = base.exp_range();
+
+        let (lsig, rsig) = (T::lshift_u128(self.sig as u128, max_exp), rhs.sig as u128);
+        let (lexp, rexp) = (self.exp, rhs.exp);
+
+        let res_sig = lsig / rsig;
+        let res_exp = lexp - rexp;
+
+        let mag = T::get_mag_u128(res_sig);
+        let adj = mag - min_exp;
+
+        Self {
+            sig: T::rshift_u128(res_sig, adj) as u64,
+            exp: res_exp - adj as u64,
+            base,
+        }
+    }
+}
+
+impl<T> Shl<u64> for BigNumBase<T>
+where
+    T: Base,
+{
+    type Output = Self;
+
+    fn shl(self, rhs: u64) -> Self::Output {
+        let ExpRange(min_exp, _) = self.base.exp_range();
+
+        if self.exp != 0 {
+            // Already in expanded form
+            Self {
+                exp: self.exp.checked_add(rhs).unwrap(),
+                ..self
+            }
+        } else {
+            let mag = T::get_mag(self.sig);
+            // The number of orders of magnitude the significand can be increased
+            let adj = min_exp - mag;
+
+            if adj as u64 > rhs {
+                // The result can be made compact
+                Self {
+                    sig: T::lshift(self.sig, rhs as u32),
+                    exp: 0,
+                    ..self
+                }
+            } else {
+                Self {
+                    sig: T::lshift(self.sig, adj),
+                    exp: rhs - adj as u64,
+                    ..self
+                }
+            }
+        }
+    }
+}
+
+impl<T> Shr<u64> for BigNumBase<T>
+where
+    T: Base,
+{
+    type Output = Self;
+
+    fn shr(self, rhs: u64) -> Self::Output {
+        if self.exp >= rhs {
+            return Self {
+                exp: self.exp - rhs,
+                ..self
+            };
+        }
+
+        let mag = T::get_mag(self.sig);
+        let diff = rhs - self.exp;
+
+        if diff > mag as u64 {
+            panic!("Unable to shift {:?} by {}", self, rhs);
+        }
+
+        Self {
+            sig: T::rshift(self.sig, diff as u32),
+            exp: 0,
+            ..self
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -961,5 +1065,24 @@ max_exp:
 
         test_base!(*; Octal);
         test_base!(*; Decimal);
+    }
+
+    #[test]
+    fn binary_shifts() {
+        type BigNum = BigNumBase<Binary>;
+
+        assert_eq_bignum!(BigNum::new(0b100, 0) << 1, BigNum::new(0b1000, 0));
+        assert_eq_bignum!(BigNum::new(0b100, 0) << 2, BigNum::new(0b10000, 0));
+        assert_eq_bignum!(BigNum::new(u64::MAX, 1) << 3, BigNum::new(u64::MAX, 4));
+        assert_eq_bignum!(BigNum::new(u64::MAX, 0) << 64, BigNum::new(u64::MAX, 64));
+
+        assert_eq_bignum!(BigNum::new(0b100, 0) >> 1, BigNum::new(0b10, 0));
+        assert_eq_bignum!(BigNum::new(0b100, 0) >> 2, BigNum::new(0b1, 0));
+        assert_eq_bignum!(BigNum::new(u64::MAX, 1) >> 3, BigNum::new(u64::MAX / 4, 0));
+        assert_eq_bignum!(BigNum::new(u64::MAX, 0) >> 63, BigNum::from(1));
+        assert_eq_bignum!(
+            BigNum::new(u64::MAX, 100) >> 105,
+            BigNum::new(u64::MAX / 32, 0)
+        );
     }
 }
