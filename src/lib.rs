@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Debug,
-    ops::{Add, AddAssign, Mul, Sub, SubAssign},
+    ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
 use consts::{
@@ -112,7 +112,7 @@ impl SigRange {
 ///     }
 /// }
 /// ```
-/// In fact there's a macro to do just this
+/// In fact there's a macro to do just this.
 pub trait Base: Copy + Debug {
     /// This contains the numeric value of the type. E.g. for binary 2, for decimal 10,
     /// etc
@@ -143,6 +143,13 @@ pub trait Base: Copy + Debug {
         (Self::NUMBER as u64).pow(exp)
     }
 
+    /// This is a function that computes the same value as `pow` but in a u128 value.
+    /// Mostly useful to help with multiplication/division, and as such it's probably
+    /// unnecessary to override it unless multiplication performance is critical
+    fn pow_u128(exp: u32) -> u128 {
+        (Self::NUMBER as u128).pow(exp)
+    }
+
     /// This function calculates the ranges for the exponent and the significand. It is
     /// not particularly efficient so if performance is a concern you should not use it.
     /// It mainly exists to facilitate the `create_default_base!` macro. It is recommended
@@ -171,17 +178,34 @@ pub trait Base: Copy + Debug {
     /// for this type, and does a division. It is recommended to override this method if
     /// there is a trick for the division (like how in binary,
     /// `lhs / (2 ^ exp) = lhs >> exp`, or in octal `lhs / (8 ^ exp) = lhs >> (3 * exp)`
-    fn divide(lhs: u64, exp: u32) -> u64 {
-        lhs / Self::pow(exp)
+    fn lshift(lhs: u64, exp: u32) -> u64 {
+        lhs * Self::pow(exp)
     }
     /// This is a function that computes `lhs * (Self::NUMBER ^ exp)`. There is a default
     /// implementation that obtains the value of `Self::NUMBER ^ exp` via the `pow` method
     /// for this type, and does a multiplication. It is recommended to override this
     /// method if there is a trick for the division (like how in binary,
     /// `lhs * (2 ^ exp) = lhs << exp`, or in octal `lhs * (8 ^ exp) = lhs << (3 * exp)`
-    fn multiply(lhs: u64, exp: u32) -> u64 {
-        lhs * Self::pow(exp)
+    fn rshift(lhs: u64, exp: u32) -> u64 {
+        lhs / Self::pow(exp)
     }
+
+    /// This is a function that computes the same value as `lshift` but in a u128 value.
+    /// Mostly useful to help with multiplication/division, and as such it's probably
+    /// unnecessary to override it unless multiplication performance is critical
+    fn lshift_u128(lhs: u128, exp: u32) -> u128 {
+        lhs * Self::pow_u128(exp)
+    }
+
+    /// This is a function that computes the same value as `lshift` but in a u128 value.
+    /// Mostly useful to help with multiplication/division, and as such it's probably
+    /// unnecessary to override it unless multiplication performance is critical
+    fn rshift_u128(lhs: u128, exp: u32) -> u128 {
+        lhs / Self::pow_u128(exp)
+    }
+    /// This is a function that computes the same value as `lshift` but in a u128 value.
+    /// Mostly useful to help with multiplication/division, and as such it's probably
+    /// unnecessary to override it unless multiplication performance is critical
 
     /// This is a function that computes the highest power `x` such that
     /// `sig >= (Self::NUMBER ^ x)`. There is a default implementation that uses `ilog`,
@@ -191,6 +215,16 @@ pub trait Base: Copy + Debug {
     /// convert. I tried this with octal and hexadecimal but it had no noticeable impact.
     fn get_mag(sig: u64) -> u32 {
         sig.ilog(Self::NUMBER as u64)
+    }
+
+    /// This is a function that computes the highest power `x` such that
+    /// `sig >= (Self::NUMBER ^ x)`. There is a default implementation that uses `ilog`,
+    /// and it is recommended to use this unless there is a special way to find the
+    /// magnitude (e.g. binary and decimal have specialized `ilog` implementations).
+    /// As a special case, bases that are powers of 2 or 10 can use log arithmetic to
+    /// convert. I tried this with octal and hexadecimal but it had no noticeable impact.
+    fn get_mag_u128(sig: u128) -> u32 {
+        sig.ilog(Self::NUMBER as u128)
     }
 
     /// This method just fetches `Self::NUMBER` but is provided as an instance method for
@@ -232,11 +266,11 @@ impl Base for Binary {
         BIN_POWERS[exp as usize]
     }
 
-    fn divide(lhs: u64, exp: u32) -> u64 {
+    fn rshift(lhs: u64, exp: u32) -> u64 {
         lhs >> exp
     }
 
-    fn multiply(lhs: u64, exp: u32) -> u64 {
+    fn lshift(lhs: u64, exp: u32) -> u64 {
         lhs << exp
     }
 
@@ -264,11 +298,11 @@ impl Base for Octal {
         1 << (3 * exp)
     }
 
-    fn divide(lhs: u64, exp: u32) -> u64 {
+    fn rshift(lhs: u64, exp: u32) -> u64 {
         lhs >> (3 * exp)
     }
 
-    fn multiply(lhs: u64, exp: u32) -> u64 {
+    fn lshift(lhs: u64, exp: u32) -> u64 {
         lhs << (3 * exp)
     }
 }
@@ -378,7 +412,7 @@ max_sig:
             // Since we know `max_sig * base.as_number() > u64::MAX`, we also know
             // that `sig / base.as_number() <= max_sig`
             Self {
-                sig: T::divide(sig, 1),
+                sig: T::rshift(sig, 1),
                 exp: exp + 1,
                 base,
             }
@@ -394,7 +428,7 @@ max_sig:
 
             if mag.saturating_add(exp as u32) <= min_exp {
                 Self {
-                    sig: T::multiply(sig, exp as u32),
+                    sig: T::lshift(sig, exp as u32),
                     exp: 0,
                     base,
                 }
@@ -402,7 +436,7 @@ max_sig:
                 let adj = min_exp - mag;
 
                 Self {
-                    sig: T::multiply(sig, adj),
+                    sig: T::lshift(sig, adj),
                     exp: exp - adj as u64,
                     base,
                 }
@@ -474,13 +508,13 @@ where
             return max;
         }
 
-        let result = max.sig.wrapping_add(T::divide(min.sig, shift as u32));
+        let result = max.sig.wrapping_add(T::rshift(min.sig, shift as u32));
 
         let (sig, exp) = if result < max.sig {
             // Wrapping occurred, handle it
-            (min_sig + T::divide(result, 1), max.exp + 1)
+            (min_sig + T::rshift(result, 1), max.exp + 1)
         } else if T::NUMBER != 2 && result > max_sig {
-            (T::divide(result, 1), max.exp + 1)
+            (T::rshift(result, 1), max.exp + 1)
         } else {
             (result, max.exp)
         };
@@ -531,7 +565,7 @@ where
             return max;
         }
 
-        let result = max.sig.wrapping_sub(T::divide(min.sig, shift as u32));
+        let result = max.sig.wrapping_sub(T::rshift(min.sig, shift as u32));
 
         let (res_sig, res_exp) = if result > max.sig {
             // Wrapping occurred, handle it by decrementing the exponent
@@ -560,7 +594,7 @@ where
 
             if adj as u64 == res_exp {
                 Self {
-                    sig: T::multiply(res_sig, adj),
+                    sig: T::lshift(res_sig, adj),
                     exp: 0,
                     base,
                 }
@@ -571,13 +605,13 @@ where
                 let diff = adj as u64 - res_exp - 1;
 
                 Self {
-                    sig: T::multiply(res_sig, diff as u32),
+                    sig: T::lshift(res_sig, diff as u32),
                     exp: 0,
                     base,
                 }
             } else {
                 Self {
-                    sig: T::multiply(res_sig, adj),
+                    sig: T::lshift(res_sig, adj),
                     exp: res_exp - adj as u64,
                     base,
                 }
@@ -595,19 +629,79 @@ where
     }
 }
 
-impl<T> Mul for BigNumBase<T> where T: Base {
+impl<T> Mul for BigNumBase<T>
+where
+    T: Base,
+{
     type Output = BigNumBase<T>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         let base = self.base;
-        let (lhs, rhs) = (self.sig as u128, rhs.sig as u128);
-        let SigRange(min_sig, max_sig) = base.sig_range();
 
-        let res = lhs * rhs;
-
-        if res > max_sig as u128 {
-            let mag = T::get_mag(sig)
+        if self.exp == 0 && self.sig == 1 {
+            return rhs;
+        } else if self.exp == 0 && self.sig == 0 {
+            return Self {
+                sig: 0,
+                exp: 0,
+                base,
+            };
+        } else if rhs.exp == 0 && rhs.sig == 1 {
+            return self;
+        } else if rhs.exp == 0 && rhs.sig == 0 {
+            return Self {
+                sig: 0,
+                exp: 0,
+                base,
+            };
         }
+
+        let (lsig, rsig) = (self.sig as u128, rhs.sig as u128);
+        let (lexp, rexp) = (self.exp, rhs.exp);
+        let SigRange(min_sig, max_sig) = base.sig_range();
+        let ExpRange(min_exp, max_exp) = base.exp_range();
+
+        let res_sig = lsig * rsig;
+        let res_exp = lexp + rexp;
+
+        if res_sig > max_sig as u128 {
+            let mag = T::get_mag_u128(res_sig);
+
+            let adj = mag - min_exp;
+            let sig = T::rshift_u128(res_sig, adj);
+            if sig > u64::MAX as u128 {
+                panic!(
+                    "Unable to normalize result for multiplication between {:?} and {:?}",
+                    self, rhs
+                );
+            } else {
+                Self {
+                    sig: sig as u64,
+                    exp: res_exp + adj as u64,
+                    base,
+                }
+            }
+        } else if res_exp != 0 && res_sig < min_sig as u128 {
+            panic!(
+                "Found invalid significand while multiplying {:?} and {:?}",
+                self, rhs
+            );
+        } else {
+            Self {
+                sig: res_sig as u64,
+                exp: res_exp,
+                base,
+            }
+        }
+    }
+}
+
+impl<T> MulAssign for BigNumBase<T>
+where
+    T: Base,
+{
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
     }
 }
 
@@ -810,7 +904,43 @@ max_exp:
     }
 
     #[test]
-    fn sub_many_test() {
+    fn mul_binary_test() {
+        type BigNum = BigNumBase<Binary>;
+        let SigRange(min_sig, max_sig) = Binary::calculate_ranges().1;
+
+        assert_eq_bignum!(
+            BigNum::from(14215125) * BigNum::from(120487091724u64),
+            BigNum::from(120487091724u64 * 14215125)
+        );
+        // 2^63 * 2^63 = 2^126
+        assert_eq_bignum!(
+            BigNum::from(min_sig) * BigNum::from(min_sig),
+            BigNum::new(min_sig, 63)
+        );
+        assert_eq_bignum!(
+            BigNum::from(min_sig) * BigNum::from(min_sig),
+            BigNum::new(min_sig, 63)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 1) * BigNum::new(max_sig, 1),
+            BigNum::new(max_sig - 1, 64 + 2)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 1123) * BigNum::new(max_sig, 11325),
+            BigNum::new(max_sig - 1, 64 + 1123 + 11325)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig - min_sig, 123410923) * BigNum::from(0),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig - min_sig, 123410923) * BigNum::from(1),
+            BigNum::new(max_sig - min_sig, 123410923)
+        );
+    }
+
+    #[test]
+    fn test_many_bases() {
         // Not doing Binary or Hex since these tests assume max_sig + 1 fits in u64
         create_and_test_base!(*; Base61, 61);
         create_and_test_base!(*; Base11142, 11142);

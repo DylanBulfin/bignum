@@ -53,6 +53,28 @@ macro_rules! impl_for_types {
                     *self = *self - BigNumBase::from(rhs);
                 }
             }
+
+            impl<T> Mul<$ty> for BigNumBase<T> where T:Base {
+                type Output = Self;
+
+                fn mul(self, rhs: $ty) -> Self::Output {
+                    self * BigNumBase::from(rhs)
+                }
+            }
+
+            impl<T> Mul<BigNumBase<T>> for $ty where T:Base{
+                type Output = BigNumBase<T>;
+
+                fn mul(self, rhs: BigNumBase<T>) -> Self::Output {
+                    BigNumBase::from(self) * rhs
+                }
+            }
+
+            impl<T> MulAssign<$ty> for BigNumBase<T> where T:Base {
+                fn mul_assign(&mut self, rhs: $ty){
+                    *self = *self * BigNumBase::from(rhs);
+                }
+            }
         )+
     };
 }
@@ -94,6 +116,7 @@ macro_rules! test_base {
     (*; $base:ident) => {{
         test_base!(add $base);
         test_base!(sub $base);
+        test_base!(mul $base);
     }};
     (sub $base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -134,7 +157,33 @@ macro_rules! test_base {
         );
         assert_eq_bignum!(
             BigNum::new(max_sig, 142) + BigNum::new(min_sig, 140),
-            BigNum::new(min_sig + $base::divide(max_sig, 4), 143)
+            BigNum::new(min_sig + $base::rshift(max_sig, 4), 143)
+        );
+    }};
+    (mul $base:ident) => {{
+        type BigNum = BigNumBase<$base>;
+        let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
+        let ExpRange(min_exp, max_exp) = $base::calculate_ranges().0;
+
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) * $base::NUMBER as u64,
+            BigNum::new(min_sig, 2)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 1) * max_sig,
+            BigNum::new_raw(max_sig - 1, max_exp as u64 + 1 + 0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 112341234) * BigNum::new(max_sig, 12341),
+            BigNum::new_raw(max_sig - 1, max_exp as u64 + 112341234 + 12341)
+        );
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) * BigNum::new(min_sig + 1, 1241234),
+            BigNum::new(min_sig + 1, min_exp as u64 + 1 + 1241234)
+        );
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) * BigNum::new(max_sig , 1241234),
+            BigNum::new(max_sig, min_exp as u64 + 1 + 1241234)
         );
     }};
 }
