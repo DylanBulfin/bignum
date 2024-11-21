@@ -722,6 +722,13 @@ where
             _ => (),
         }
 
+        if self.exp == 0 {
+            return Self {
+                sig: self.sig / rhs.sig,
+                ..self
+            };
+        }
+
         let base = self.base;
         let ExpRange(min_exp, max_exp) = base.exp_range();
 
@@ -732,12 +739,28 @@ where
         let res_exp = lexp - rexp;
 
         let mag = T::get_mag_u128(res_sig);
-        let adj = mag - min_exp;
+        // lsig had a magnitude of min_exp + max_exp, this tracks how many orders of
+        // magnitude were "lost" with this division
+        let adj = (min_exp + max_exp) - mag;
 
-        Self {
-            sig: T::rshift_u128(res_sig, adj) as u64,
-            exp: res_exp - adj as u64,
-            base,
+        if adj as u64 <= res_exp {
+            // We would shift by max_exp normally, but since we lost adj orders of
+            // magnitude we have to shift by max_exp - adj
+            Self {
+                sig: T::rshift_u128(res_sig, max_exp - adj) as u64,
+                exp: res_exp - adj as u64,
+                ..self
+            }
+        } else {
+            let diff = adj as u64 - res_exp;
+            // We would normally shift by max_exp, but we lost adj order of magnitude
+            // and took diff orders of magnitude from the exponent, so we shift by
+            // max_exp - adj + diff
+            Self {
+                sig: T::rshift_u128(res_sig, max_exp - adj + diff as u32) as u64,
+                exp: 0,
+                ..self
+            }
         }
     }
 }
@@ -1018,6 +1041,38 @@ mod tests {
         assert_eq_bignum!(
             BigNum::from(123412341234432u64) / BigNum::from(1221314),
             BigNum::from(123412341234432u64 / 1221314)
+        );
+        assert_eq_bignum!(
+            BigNum::from(123412341234432u64) / BigNum::from(123412341234432u64),
+            BigNum::from(1)
+        );
+        assert_eq_bignum!(
+            BigNum::from(123412341234432u64) / BigNum::from(12341234123412341234u64),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(123412341234432u64, 12341234) / BigNum::new(123412341234432u64, 12341234),
+            BigNum::from(1)
+        );
+        assert_eq_bignum!(
+            BigNum::new(123412341234432u64, 12341234) / BigNum::new(123412341234432u64, 12341235),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(123412341234432u64, 12341234) / BigNum::new(123412341234433u64, 12341234),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 12341234) / BigNum::new(min_sig, 12341233),
+            BigNum::from(2)
+        );
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 12341234) / BigNum::new(min_sig, 1),
+            BigNum::new(min_sig, 12341234 - 64)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 12341234) / BigNum::new(max_sig, 1),
+            BigNum::new(min_sig, 12341234 - 64)
         );
     }
 
