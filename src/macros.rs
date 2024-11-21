@@ -145,31 +145,9 @@ macro_rules! create_default_base {
     };
 }
 
-// Runs some non-base specific tests
 #[macro_export]
-macro_rules! test_base {
-    (@sub $base:ident) => {{
-        type BigNum = BigNumBase<$base>;
-        let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
-
-        assert_eq_bignum!(
-            BigNum::new(min_sig, 1) - $base::NUMBER as u64,
-            BigNum::new_raw(max_sig - ($base::NUMBER as u64 - 1), 0)
-        );
-        assert_eq_bignum!(
-            BigNum::new(max_sig, 1) - max_sig,
-            BigNum::new_raw(max_sig - max_sig / $base::NUMBER as u64, 1)
-        );
-        assert_eq_bignum!(
-            BigNum::new(12341098709128730491, 11234) - BigNum::new(12341098709128730491, 11234),
-            BigNum::from(0)
-        );
-        assert_eq_bignum!(
-            BigNum::from(max_sig) - BigNum::from(max_sig),
-            BigNum::from(0)
-        );
-    }};
-    (@add $base:ident) => {{
+macro_rules! test_add {
+    ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
 
@@ -190,7 +168,36 @@ macro_rules! test_base {
             BigNum::new(min_sig + $base::rshift(max_sig, 4), 143)
         );
     }};
-    (@mul $base:ident) => {{
+}
+
+#[macro_export]
+macro_rules! test_sub {
+    ($base:ident) => {{
+        type BigNum = BigNumBase<$base>;
+        let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
+
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) - $base::NUMBER as u64,
+            BigNum::new_raw(max_sig - ($base::NUMBER as u64 - 1), 0)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 1) - max_sig,
+            BigNum::new_raw(max_sig - max_sig / $base::NUMBER as u64, 1)
+        );
+        assert_eq_bignum!(
+            BigNum::new(12341098709128730491, 11234) - BigNum::new(12341098709128730491, 11234),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::from(max_sig) - BigNum::from(max_sig),
+            BigNum::from(0)
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! test_mul {
+    ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
         let ExpRange(min_exp, max_exp) = $base::calculate_ranges().0;
@@ -212,11 +219,15 @@ macro_rules! test_base {
             BigNum::new(min_sig + 1, min_exp as u64 + 1 + 1241234)
         );
         assert_eq_bignum!(
-            BigNum::new(min_sig, 1) * BigNum::new(max_sig , 1241234),
+            BigNum::new(min_sig, 1) * BigNum::new(max_sig, 1241234),
             BigNum::new(max_sig, min_exp as u64 + 1 + 1241234)
         );
     }};
-    (@div $base:ident) => {{
+}
+
+#[macro_export]
+macro_rules! test_div {
+    ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
         let ExpRange(min_exp, max_exp) = $base::calculate_ranges().0;
@@ -226,26 +237,43 @@ macro_rules! test_base {
             BigNum::new($base::NUMBER as u64, 0)
         );
         assert_eq_bignum!(
-            BigNum::new_raw(max_sig - 1, max_exp as u64 + 1 + 0)
-                / BigNum::new(max_sig, 1),
-            BigNum::from(max_sig)
+            BigNum::new_raw(max_sig, 1) / BigNum::new(max_sig, 1),
+            BigNum::from(1)
         );
         assert_eq_bignum!(
-            BigNum::new_raw(max_sig - 1, max_exp as u64 + 112341234 + 12341)
-                / BigNum::new(max_sig, 112341234),
+            BigNum::new_raw(max_sig, 1) / BigNum::new(max_sig, 2),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::new_raw(min_sig, 1) / BigNum::new(min_sig + 1, 1),
+            BigNum::from(0)
+        );
+        assert_eq_bignum!(
+            BigNum::new_raw(max_sig, 5) / BigNum::new(max_sig, 1),
+            BigNum::new($base::pow(4), 0)
+        );
+        // The total magnitude for the lhs is (min_exp + min_exp + 112341234 + 12341), and
+        // the total magnitude for the rhs is (min_exp + 112341234), so we expect that the
+        // resulting magnitude will be mag(lhs) - mag(rhs) = min_exp + 12341, as shown
+        assert_eq_bignum!(
+            BigNum::new_raw(max_sig, min_exp as u64 + 112341234 + 12341)
+                / BigNum::new(min_sig, 112341234),
             BigNum::new(max_sig, 12341)
-
         );
-        assert_eq_bignum!(
-            BigNum::new(min_sig, 1) * BigNum::new(min_sig + 1, 1241234),
-            BigNum::new(min_sig + 1, min_exp as u64 + 1 + 1241234)
-        );
-        assert_eq_bignum!(
-            BigNum::new(min_sig, 1) * BigNum::new(max_sig , 1241234),
-            BigNum::new(max_sig, min_exp as u64 + 1 + 1241234)
-        );
+        //assert_eq_bignum!(
+        //    BigNum::new(min_sig, 1) * BigNum::new(min_sig + 1, 1241234),
+        //    BigNum::new(min_sig + 1, min_exp as u64 + 1 + 1241234)
+        //);
+        //assert_eq_bignum!(
+        //    BigNum::new(min_sig, 1) * BigNum::new(max_sig, 1241234),
+        //    BigNum::new(max_sig, min_exp as u64 + 1 + 1241234)
+        //);
     }};
-    (@succ $base:ident) => {{
+}
+
+#[macro_export]
+macro_rules! test_succ {
+    ($base:ident) => {{
         use $crate::traits::Succ;
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
@@ -258,7 +286,11 @@ macro_rules! test_base {
             BigNum::new(min_sig, 2143125)
         );
     }};
-    (@pred $base:ident) => {{
+}
+
+#[macro_export]
+macro_rules! test_pred {
+    ($base:ident) => {{
         use $crate::traits::Pred;
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
@@ -267,7 +299,11 @@ macro_rules! test_base {
         assert_eq_bignum!(BigNum::new(min_sig, 1).pred(), BigNum::new(max_sig, 0));
         assert_eq_bignum!(BigNum::new(min_sig, 2).pred(), BigNum::new(max_sig, 1));
     }};
-    (@shl $base:ident) => {{
+}
+
+#[macro_export]
+macro_rules! test_shl {
+    ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
 
@@ -285,7 +321,11 @@ macro_rules! test_base {
         assert_eq_bignum!(BigNum::new(max_sig, 3) << 4, BigNum::new(max_sig, 7));
         assert_eq_bignum!(BigNum::new(max_sig, 23) << 1243, BigNum::new(max_sig, 1266));
     }};
-    (@shr $base:ident) => {{
+}
+
+#[macro_export]
+macro_rules! test_shr {
+    ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
 
@@ -309,16 +349,20 @@ macro_rules! test_base {
         );
         assert_eq_bignum!(BigNum::new(max_sig, 1266) >> 1243, BigNum::new(max_sig, 23));
     }};
+}
 
+// Runs some non-base specific tests
+#[macro_export]
+macro_rules! test_base {
     ($base:ident) => {{
-        test_base!(@add $base);
-        test_base!(@sub $base);
-        test_base!(@mul $base);
-        test_base!(@pred $base);
-        test_base!(@succ $base);
-        test_base!(@shl $base);
-        test_base!(@shr $base);
-        //test_base!(div $base);
+        $crate::test_add!($base);
+        $crate::test_sub!($base);
+        $crate::test_mul!($base);
+        $crate::test_div!($base);
+        $crate::test_succ!($base);
+        $crate::test_pred!($base);
+        $crate::test_shl!($base);
+        $crate::test_shr!($base);
     }};
 }
 

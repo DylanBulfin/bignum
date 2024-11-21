@@ -1074,6 +1074,14 @@ mod tests {
             BigNum::new(max_sig, 12341234) / BigNum::new(max_sig, 1),
             BigNum::new(min_sig, 12341234 - 64)
         );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 12341234) / BigNum::new(min_sig, 1),
+            BigNum::new(max_sig, 12341234 - 64)
+        );
+        assert_eq_bignum!(
+            BigNum::new(max_sig, 63 + 12341234) / BigNum::new(min_sig, 1),
+            BigNum::new(max_sig, 12341234 - 1)
+        );
     }
 
     #[test]
