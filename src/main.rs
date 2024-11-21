@@ -1,6 +1,5 @@
 use bignum::BigNumBase;
 use bignum::Binary;
-use rand::distributions::Uniform;
 
 fn calculate_ranges(base: u16) -> ((u32, u32), (u64, u64)) {
     let mut powers = vec![];

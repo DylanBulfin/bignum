@@ -1,5 +1,3 @@
-use crate::traits::{Pred, Succ};
-use crate::{Base, ExpRange, SigRange};
 
 // Overriding it for better error messages
 #[macro_export]
@@ -230,7 +228,7 @@ macro_rules! test_div {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
         let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
-        let ExpRange(min_exp, max_exp) = $base::calculate_ranges().0;
+        let ExpRange(min_exp, _) = $base::calculate_ranges().0;
 
         assert_eq_bignum!(
             BigNum::new(min_sig, 2) / BigNum::new(min_sig, 1),
