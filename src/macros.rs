@@ -32,108 +32,106 @@ max_exp:
     };
 }
 
-/// For a type `ty`, implement `From<$ty>, Add<$ty>, AddAssign<$ty>, ...`. Already used
-/// on `u64` but provided in case you want to use it on another type.
-#[macro_export]
 macro_rules! impl_for_types {
     ($($ty:ty),+) => {
         $(
-            impl<T> From<$ty> for BigNumBase<T> where T: Base {
+            impl<T> From<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 fn from(value: $ty) -> Self {
                     Self::new(value as u64, 0)
                 }
             }
 
-            impl<T> std::ops::Add<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::Add<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 type Output = Self;
 
                 fn add(self, rhs: $ty) -> Self::Output {
-                    self + BigNumBase::from(rhs)
+                    self + $crate::BigNumBase::from(rhs)
                 }
             }
 
-            impl<T> std::ops::Add<BigNumBase<T>> for $ty where T: Base {
-                type Output = BigNumBase<T>;
+            impl<T> std::ops::Add<$crate::BigNumBase<T>> for $ty where T: $crate::Base {
+                type Output = $crate::BigNumBase<T>;
 
-                fn add(self, rhs: BigNumBase<T>) -> Self::Output {
-                    rhs + BigNumBase::from(self)
+                fn add(self, rhs: $crate::BigNumBase<T>) -> Self::Output {
+                    rhs + $crate::BigNumBase::from(self)
                 }
             }
 
-            impl<T> std::ops::AddAssign<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::AddAssign<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 fn add_assign(&mut self, rhs: $ty) {
-                    *self = *self + BigNumBase::from(rhs);
+                    *self = *self + $crate::BigNumBase::from(rhs);
                 }
             }
 
-            impl<T> std::ops::Sub<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::Sub<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 type Output = Self;
 
                 fn sub(self, rhs: $ty) -> Self::Output {
-                    self - BigNumBase::from(rhs)
+                    self - $crate::BigNumBase::from(rhs)
                 }
             }
 
-            impl<T> std::ops::Sub<BigNumBase<T>> for $ty where T: Base {
-                type Output = BigNumBase<T>;
+            impl<T> std::ops::Sub<$crate::BigNumBase<T>> for $ty where T: $crate::Base {
+                type Output = $crate::BigNumBase<T>;
 
-                fn sub(self, rhs: BigNumBase<T>) -> Self::Output {
-                    BigNumBase::from(self) - rhs
+                fn sub(self, rhs: $crate::BigNumBase<T>) -> Self::Output {
+                    $crate::BigNumBase::from(self) - rhs
                 }
             }
 
-            impl<T> std::ops::SubAssign<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::SubAssign<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 fn sub_assign(&mut self, rhs: $ty) {
-                    *self = *self - BigNumBase::from(rhs);
+                    *self = *self - $crate::BigNumBase::from(rhs);
                 }
             }
 
-            impl<T> std::ops::Mul<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::Mul<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 type Output = Self;
 
                 fn mul(self, rhs: $ty) -> Self::Output {
-                    self * BigNumBase::from(rhs)
+                    self * $crate::BigNumBase::from(rhs)
                 }
             }
 
-            impl<T> std::ops::Mul<BigNumBase<T>> for $ty where T: Base{
-                type Output = BigNumBase<T>;
+            impl<T> std::ops::Mul<$crate::BigNumBase<T>> for $ty where T: $crate::Base{
+                type Output = $crate::BigNumBase<T>;
 
-                fn mul(self, rhs: BigNumBase<T>) -> Self::Output {
-                    BigNumBase::from(self) * rhs
+                fn mul(self, rhs: $crate::BigNumBase<T>) -> Self::Output {
+                    $crate::BigNumBase::from(self) * rhs
                 }
             }
 
-            impl<T> std::ops::MulAssign<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::MulAssign<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 fn mul_assign(&mut self, rhs: $ty){
-                    *self = *self * BigNumBase::from(rhs);
+                    *self = *self * $crate::BigNumBase::from(rhs);
                 }
             }
 
-            impl<T> std::ops::Div<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::Div<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 type Output = Self;
 
                 fn div(self, rhs: $ty) -> Self::Output {
-                    self / BigNumBase::from(rhs)
+                    self / $crate::BigNumBase::from(rhs)
                 }
             }
 
-            impl<T> std::ops::Div<BigNumBase<T>> for $ty where T: Base{
-                type Output = BigNumBase<T>;
+            impl<T> std::ops::Div<$crate::BigNumBase<T>> for $ty where T: $crate::Base{
+                type Output = $crate::BigNumBase<T>;
 
-                fn div(self, rhs: BigNumBase<T>) -> Self::Output {
-                    BigNumBase::from(self) / rhs
+                fn div(self, rhs: $crate::BigNumBase<T>) -> Self::Output {
+                    $crate::BigNumBase::from(self) / rhs
                 }
             }
 
-            impl<T> std::ops::DivAssign<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::DivAssign<$ty> for $crate::BigNumBase<T> where T: $crate::Base {
                 fn div_assign(&mut self, rhs: $ty){
-                    *self = *self / BigNumBase::from(rhs);
+                    *self = *self / $crate::BigNumBase::from(rhs);
                 }
             }
         )+
     };
 }
+impl_for_types!(u64);
 
 /// This macro creates a default `Base` implementation with a given name and number.
 ///

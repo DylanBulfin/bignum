@@ -467,13 +467,14 @@ impl Base for Decimal {
     }
 }
 
-/// This is the main struct for `BigNum`. It takes a generic argument for the base, e.g.
+/// This is the main struct for `BigNum`. 
+///
+/// It takes a generic argument for the base, e.g.
 /// `BigNumBase<Binary>`. It is recommended to either create a custom type alias or
 /// use one of the predefined ones (`BigNumBin, BigNumOct, BigNumDec, BigNumHex`). You
 /// should be able to use them pretty much exactly like other numbers in most contexts.
-/// For convenience I define `From` and all math operations for `u64`, and provide a macro
-/// to define this relation for other numeral types (anything that can be cast to `u64`
-/// via `as`)
+/// For convenience I define `From` and all math operations for `u64`, but keep in mind
+/// that the `From` implementation, like `new`, involves recalculating the base ranges.
 ///
 /// ```
 /// use bignum::{BigNumBase, Binary};
@@ -500,8 +501,6 @@ where
     pub exp: u64,
     pub base: T,
 }
-
-impl_for_types!(u64);
 
 impl<T> BigNumBase<T>
 where
