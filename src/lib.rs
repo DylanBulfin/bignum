@@ -285,21 +285,25 @@ pub trait Base: Copy + Debug {
 /// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Binary;
+pub type BigNumBin = BigNumBase<Binary>;
 
 /// This type represents an octal base. It contains more efficient overrides of the
 /// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Octal;
+pub type BigNumOct = BigNumBase<Octal>;
 
 /// This type represents a hexadecimal base. It contains more efficient overrides of the
 /// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Hexadecimal;
+pub type BigNumHex = BigNumBase<Hexadecimal>;
 
 /// This type represents a decimal base. It contains more efficient overrides of the
 /// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Decimal;
+pub type BigNumDec = BigNumBase<Decimal>;
 
 impl Base for Binary {
     const NUMBER: u16 = 2;
