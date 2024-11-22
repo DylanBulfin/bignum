@@ -1,5 +1,5 @@
 [package]
-name = "bignum"
+name = "bignumbe-rs"
 version = "0.1.0"
 edition = "2021"
 description = "Large, medium-precision numbers"

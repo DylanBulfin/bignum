@@ -1,7 +1,7 @@
 //#![cfg(feature = "bench")]
 use std::{hint::black_box, iter::from_fn};
 
-use bignum::{
+use bignumbe_rs::{
     //bignumold::{old_impl::BigNumOld, old_methods},
     create_default_base,
     Base,

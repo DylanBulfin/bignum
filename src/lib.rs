@@ -467,7 +467,7 @@ impl Base for Decimal {
     }
 }
 
-/// This is the main struct for `BigNum`. 
+/// This is the main struct for `bignumbe-rs`. 
 ///
 /// It takes a generic argument for the base, e.g.
 /// `BigNumBase<Binary>`. It is recommended to either create a custom type alias or
