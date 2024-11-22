@@ -2,6 +2,8 @@
 name = "bignum"
 version = "0.1.0"
 edition = "2021"
+description = "Large, medium-precision numbers"
+license = "GPL-3.0"
 
 [features]
 random = ["dep:rand"]
