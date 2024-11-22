@@ -1,3 +1,9 @@
+//! This crate defines a custom medium-precision number type. It can support any base `b`
+//! in the range `[0, 65535]`, and can approximately represent numbers up to
+//! `b ^ u64::MAX` (actually a bit higher than that but the math is complicated). A core
+//! goal for this type was that it can implement `Copy` and as a result it can be used in
+//! almost any context a normal unsigned integer would be valid.
+
 use std::{
     cmp::Ordering,
     fmt::Debug,
@@ -9,14 +15,33 @@ use consts::{
     HEX_EXP_RANGE, HEX_POWERS, HEX_SIG_RANGE,
 };
 
+#[cfg(feature = "random")]
+pub mod random;
+
 pub(crate) mod consts;
 pub(crate) mod error;
-pub mod macros;
-//pub mod random;
+pub(crate) mod macros;
+
 pub mod traits;
 
 #[derive(Clone, Copy, Debug)]
-pub struct ExpRange(u32, u32);
+/// This represents the non-inclusive range of exponents that constitute a valid
+/// non-compact significand in the given base. You only need to use this if manually
+/// defining a custom base (if performance is non-critical I would recommend using the
+/// `create_default_base` macro).
+///
+/// # Examples
+/// ```
+/// use bignum::{ExpRange, Binary, Base};
+///
+/// let ExpRange(min_exp, max_exp) = Binary::calculate_ranges().0;
+///
+/// // Since the range of valid significands for non-compact Binary BigNum instances is
+/// // [2^63, 2^64), we expect an ExpRange of (63, 64)
+/// assert_eq!(min_exp, 63);
+/// assert_eq!(max_exp, 64);
+/// ```
+pub struct ExpRange(pub u32, pub u32);
 
 impl ExpRange {
     pub const fn new(min: u32, max: u32) -> Self {
@@ -37,7 +62,23 @@ impl ExpRange {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct SigRange(u64, u64);
+/// This represents the inclusive range of values that constitute a valid non-compact
+/// significand in the given base. You only need to use this if manually defining a custom
+/// base (if performance is non-critical I would recommend using the `create_default_base`
+/// macro).
+///
+/// # Examples
+/// ```
+/// use bignum::{SigRange, Binary, Base};
+///
+/// let SigRange(min_sig, max_sig) = Binary::calculate_ranges().1;
+///
+/// // Since the range of valid significands for non-compact Binary BigNum instances is
+/// // [2^63, 2^64), we expect a SigRange of (2^63, 2^64 - 1)
+/// assert_eq!(min_sig, 1 << 63);
+/// assert_eq!(max_sig, u64::MAX);
+/// ```
+pub struct SigRange(pub u64, pub u64);
 
 impl SigRange {
     pub const fn new(min: u64, max: u64) -> Self {
@@ -57,21 +98,31 @@ impl SigRange {
     }
 }
 
+/// If performance isn't critical I'd highly recommend the `create_default_base` macro
+/// which creates a base with sensible defaults. The only reason to create a custom
+/// implementation is if you find the default implementations' operations to be a
+/// bottleneck. In this case I'd recommend looking at my implementation of the `Decimal`
+/// base as a guide.
+///
 /// This trait is used to indicate that a type is a valid base for a BigNumBase. It
 /// contains metadata and functions that can be used to efficiently handle arbitrary
-/// bases. Importantly you must ensure the following (base is just an instance of the
-/// type, since some methods don't have static versions):
-/// - `exp_range().max() = exp_range().min() + 1`
-/// - `exp_range().min() > 0`
-/// - `sig_range().min() = base.pow(exp_range().min())`
-/// - `sig_range().max() = base.pow(exp_range().max()) - 1`
-/// - `base.pow(n) = NUMBER.exp(n)` for all `n <= exp_range().max()`
-/// - `base.divide(lhs, exp) = lhs / NUMBER.exp(n)` for all `n <= exp_range().max()`
-/// - `base.multiply(lhs, exp) = lhs * NUMBER.exp(n)` for all `n <= exp_range().max()`
-/// - `base.get_mag(n)` should return the highest exponent `x` such that
-///     `n >= base.pow(x)`, for all `n <= exp_range().max()`
-/// - `sig_range().min() * NUMBER > u64::MAX`
+/// bases. Importantly you must ensure all of the following:
+/// - `base.exp_range().max() = base.exp_range().min() + 1`
+/// - `base.exp_range().min() > 0`
+/// - `base.sig_range().min() = base.pow(exp_range().min())`
+/// - `base.sig_range().max() = base.pow(exp_range().max()) - 1`
+/// - `B::pow(n) = NUMBER.pow(n)` for all `n < base.exp_range().max()`
+/// - `B::rshift(lhs, exp) = lhs / B::NUMBER.pow(n)` for all `n <= base.exp_range().max()`
+/// - `B::lshift(lhs, exp) = lhs * B::NUMBER.exp(n)` for all
+///     `n <= base.exp_range().max()`
+/// - `B::get_mag(n)` should return the highest exponent `x` such that `n >= B::pow(x)`,
+///     for all `n <= exp_range().max()`
+/// - `base.sig_range().min() * B::NUMBER > u64::MAX`
 ///     - This restriction allows us to conveniently handle some construction cases
+///
+/// The above requirements also hold for the `u128` versions of
+/// `lshift, rshift, get_mag, pow` which are used for multiplication and division (since
+/// those calculations involve projecting values to `u128` to preserve information)
 ///
 /// Some of these calculations have the potential to overflow a `u64` so you may need to
 /// think of other ways to compute them if you plan to verify them manually.
@@ -85,7 +136,9 @@ impl SigRange {
 /// }
 /// ```
 /// is valid, it's ill-advised here. If you need a table of powers I would recommend a
-/// global const array that you reference in the `pow` method. The recommended format for
+/// global const array that you reference in the `pow` method.
+///
+/// The recommended format for
 /// a non-performance critical simple Base definition and implementation is:
 /// ```
 /// use bignum::{ExpRange, SigRange, Base};
@@ -113,17 +166,16 @@ impl SigRange {
 ///     }
 /// }
 /// ```
-/// In fact there's a macro to do just this.
 pub trait Base: Copy + Debug {
     /// This contains the numeric value of the type. E.g. for binary 2, for decimal 10,
-    /// etc
+    /// etc.
     const NUMBER: u16;
 
     /// Function that can create an instance of this Base. Users should never have to
     /// manually create instances of this type. This is called implicitly on every
     /// call to `BigNumBase<Self>::new()` so it should be as lightweight as possible. Note
     /// that it is not called when creating a BigNumBase<Self> from another, like when
-    /// performing an addition. In this case it is simply copied
+    /// performing an addition. In this case the base is simply copied over.
     fn new() -> Self;
 
     /// Function that fetches the non-inclusive range of the exponent for the significand
@@ -146,7 +198,7 @@ pub trait Base: Copy + Debug {
 
     /// This is a function that computes the same value as `pow` but in a u128 value.
     /// Mostly useful to help with multiplication/division, and as such it's probably
-    /// unnecessary to override it unless multiplication performance is critical
+    /// unnecessary to override it unless multiplication/division performance is critical
     fn pow_u128(exp: u32) -> u128 {
         (Self::NUMBER as u128).pow(exp)
     }
@@ -174,39 +226,36 @@ pub trait Base: Copy + Debug {
         }
     }
 
-    /// This is a function that computes `lhs / (Self::NUMBER ^ exp)`. There is a default
+    /// This is a function that computes `lhs * (Self::NUMBER ^ exp)`. There is a default
     /// implementation that obtains the value of `Self::NUMBER ^ exp` via the `pow` method
     /// for this type, and does a division. It is recommended to override this method if
     /// there is a trick for the division (like how in binary,
-    /// `lhs / (2 ^ exp) = lhs >> exp`, or in octal `lhs / (8 ^ exp) = lhs >> (3 * exp)`
+    /// `lhs * (2 ^ exp) = lhs >> exp`, or in octal `lhs * (8 ^ exp) = lhs >> (3 * exp)`
     fn lshift(lhs: u64, exp: u32) -> u64 {
         lhs * Self::pow(exp)
     }
-    /// This is a function that computes `lhs * (Self::NUMBER ^ exp)`. There is a default
+    /// This is a function that computes `lhs / (Self::NUMBER ^ exp)`. There is a default
     /// implementation that obtains the value of `Self::NUMBER ^ exp` via the `pow` method
     /// for this type, and does a multiplication. It is recommended to override this
     /// method if there is a trick for the division (like how in binary,
-    /// `lhs * (2 ^ exp) = lhs << exp`, or in octal `lhs * (8 ^ exp) = lhs << (3 * exp)`
+    /// `lhs / (2 ^ exp) = lhs << exp`, or in octal `lhs / (8 ^ exp) = lhs << (3 * exp)`
     fn rshift(lhs: u64, exp: u32) -> u64 {
         lhs / Self::pow(exp)
     }
 
-    /// This is a function that computes the same value as `lshift` but in a u128 value.
+    /// This is a function that computes the same thing as `lshift` but in a u128 value.
     /// Mostly useful to help with multiplication/division, and as such it's probably
-    /// unnecessary to override it unless multiplication performance is critical
+    /// unnecessary to override it unless multiplication/division performance is critical
     fn lshift_u128(lhs: u128, exp: u32) -> u128 {
         lhs * Self::pow_u128(exp)
     }
 
-    /// This is a function that computes the same value as `lshift` but in a u128 value.
+    /// This is a function that computes the same thing as `rshift` but in a u128 value.
     /// Mostly useful to help with multiplication/division, and as such it's probably
-    /// unnecessary to override it unless multiplication performance is critical
+    /// unnecessary to override it unless multiplication/division performance is critical
     fn rshift_u128(lhs: u128, exp: u32) -> u128 {
         lhs / Self::pow_u128(exp)
     }
-    /// This is a function that computes the same value as `lshift` but in a u128 value.
-    /// Mostly useful to help with multiplication/division, and as such it's probably
-    /// unnecessary to override it unless multiplication performance is critical
 
     /// This is a function that computes the highest power `x` such that
     /// `sig >= (Self::NUMBER ^ x)`. There is a default implementation that uses `ilog`,
@@ -218,12 +267,9 @@ pub trait Base: Copy + Debug {
         sig.ilog(Self::NUMBER as u64)
     }
 
-    /// This is a function that computes the highest power `x` such that
-    /// `sig >= (Self::NUMBER ^ x)`. There is a default implementation that uses `ilog`,
-    /// and it is recommended to use this unless there is a special way to find the
-    /// magnitude (e.g. binary and decimal have specialized `ilog` implementations).
-    /// As a special case, bases that are powers of 2 or 10 can use log arithmetic to
-    /// convert. I tried this with octal and hexadecimal but it had no noticeable impact.
+    /// This is a function that computes the same thing as `get_mag` but in a u128 value.
+    /// Mostly useful to help with multiplication/division, and as such it's probably
+    /// unnecessary to override it unless multiplication/division performance is critical
     fn get_mag_u128(sig: u128) -> u32 {
         sig.ilog(Self::NUMBER as u128)
     }
@@ -235,14 +281,23 @@ pub trait Base: Copy + Debug {
     }
 }
 
-// Since these types are powers of two I can implement Base efficiently with no metadata
+/// This type represents a binary base. It contains more efficient overrides of the
+/// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Binary;
+
+/// This type represents an octal base. It contains more efficient overrides of the
+/// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Octal;
+
+/// This type represents a hexadecimal base. It contains more efficient overrides of the
+/// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Hexadecimal;
 
+/// This type represents a decimal base. It contains more efficient overrides of the
+/// `Base` functions to improve performance.
 #[derive(Clone, Copy, Debug)]
 pub struct Decimal;
 
@@ -267,7 +322,15 @@ impl Base for Binary {
         BIN_POWERS[exp as usize]
     }
 
+    fn pow_u128(exp: u32) -> u128 {
+        1 << exp
+    }
+
     fn rshift(lhs: u64, exp: u32) -> u64 {
+        lhs >> exp
+    }
+
+    fn rshift_u128(lhs: u128, exp: u32) -> u128 {
         lhs >> exp
     }
 
@@ -275,7 +338,15 @@ impl Base for Binary {
         lhs << exp
     }
 
+    fn lshift_u128(lhs: u128, exp: u32) -> u128 {
+        lhs << exp
+    }
+
     fn get_mag(sig: u64) -> u32 {
+        sig.ilog2()
+    }
+
+    fn get_mag_u128(sig: u128) -> u32 {
         sig.ilog2()
     }
 }
@@ -299,11 +370,23 @@ impl Base for Octal {
         1 << (3 * exp)
     }
 
+    fn pow_u128(exp: u32) -> u128 {
+        1 << (3 * exp)
+    }
+
     fn rshift(lhs: u64, exp: u32) -> u64 {
         lhs >> (3 * exp)
     }
 
+    fn rshift_u128(lhs: u128, exp: u32) -> u128 {
+        lhs >> (3 * exp)
+    }
+
     fn lshift(lhs: u64, exp: u32) -> u64 {
+        lhs << (3 * exp)
+    }
+
+    fn lshift_u128(lhs: u128, exp: u32) -> u128 {
         lhs << (3 * exp)
     }
 }
@@ -329,8 +412,29 @@ impl Base for Hexadecimal {
         //1 << (exp << 2)
         HEX_POWERS[exp as usize]
     }
+
+    fn pow_u128(exp: u32) -> u128 {
+        1 << (exp << 2)
+    }
+
+    fn lshift(lhs: u64, exp: u32) -> u64 {
+        lhs << (4 * exp)
+    }
+
+    fn lshift_u128(lhs: u128, exp: u32) -> u128 {
+        lhs << (4 * exp)
+    }
+
+    fn rshift(lhs: u64, exp: u32) -> u64 {
+        lhs >> (4 * exp)
+    }
+
+    fn rshift_u128(lhs: u128, exp: u32) -> u128 {
+        lhs >> (4 * exp)
+    }
 }
 
+// TODO extend power tables to support u128
 impl Base for Decimal {
     const NUMBER: u16 = 10;
 
@@ -353,8 +457,36 @@ impl Base for Decimal {
     fn get_mag(sig: u64) -> u32 {
         sig.ilog10()
     }
+
+    fn get_mag_u128(sig: u128) -> u32 {
+        sig.ilog10()
+    }
 }
 
+/// This is the main struct for `BigNum`. It takes a generic argument for the base, e.g.
+/// `BigNumBase<Binary>`. It is recommended to either create a custom type alias or
+/// use one of the predefined ones (`BigNumBin, BigNumOct, BigNumDec, BigNumHex`). You
+/// should be able to use them pretty much exactly like other numbers in most contexts.
+/// For convenience I define `From` and all math operations for `u64`, and provide a macro
+/// to define this relation for other numeral types (anything that can be cast to `u64`
+/// via `as`)
+///
+/// ```
+/// use bignum::{BigNumBase, Binary};
+///
+/// type BigNum = BigNumBase<Binary>;
+///
+/// let bn1 = BigNum::from(1);
+/// let bn2 = BigNum::from(u64::MAX);
+///
+/// // Since this operation's result doesn't fit in `u64` it wraps over to the minimum
+/// // significand and increments the `exp`
+/// assert_eq!(bn1 + bn2, BigNum::new(1 << 63, 1));
+///
+/// assert_eq!(bn1 / bn2, BigNum::from(0));
+/// assert_eq!(bn1 * bn2, bn2);
+/// assert_eq!(bn2 * bn2, BigNum::new(u64::MAX - 1, 64));
+/// ```
 #[derive(Clone, Copy, Debug)]
 pub struct BigNumBase<T>
 where
@@ -365,45 +497,21 @@ where
     pub base: T,
 }
 
+impl_for_types!(u64);
+
 impl<T> BigNumBase<T>
 where
     T: Base,
 {
-    /// Creates a BigNumBase from values, normalizing if needed. You should always use
-    /// this unless you have a specific need
+    /// Creates a new `BigNumBase` instance that represents the value 
+    /// `sig * T::NUMBER^exp`. E.g. `BigNumBin::new(12341234, 12341)` represents
+    /// `12341234 * 2^12341`. This method will perform normalization if necessary, to
+    /// ensure the significand is in the valid range (if the number is non-compact). As
+    /// such when creating a BigNum from scratch you should always use this unless you
+    /// absolutely need a raw constructor
     pub fn new(sig: u64, exp: u64) -> Self {
         let base = T::new();
 
-        Self::new_with_base(sig, exp, base)
-    }
-
-    /// Creates a BigNumBase directly from values, panicking if not possible. This is mostly
-    /// for testing but may be more performant on inputs that are guaranteed valid
-    pub fn new_raw(sig: u64, exp: u64) -> Self {
-        let base = T::new();
-
-        if Self::is_valid(sig, exp, base.sig_range()) {
-            Self { sig, exp, base }
-        } else {
-            panic!(
-                "Unable to create BigNumBase with sig 
-{:x} and exp 
-{}
-min_sig:
-{:x},
-max_sig:
-{:x}",
-                sig,
-                exp,
-                base.sig_range().0,
-                base.sig_range().1
-            );
-        }
-    }
-
-    // This is a helper function that creates a BigNumBase from values and a base. It
-    // shouldn't be called directly, but is used by other internal methods
-    fn new_with_base(sig: u64, exp: u64, base: T) -> Self {
         let SigRange(min_sig, max_sig) = base.sig_range();
         let ExpRange(min_exp, _) = base.exp_range();
 
@@ -445,8 +553,32 @@ max_sig:
         }
     }
 
-    // Returns true if the values are valid for the current base
-    pub fn is_valid(sig: u64, exp: u64, range: SigRange) -> bool {
+    /// Creates a BigNumBase directly from values, panicking if not possible. This is 
+    /// mostly for testing but may be more performant on inputs that are guaranteed valid
+    pub fn new_raw(sig: u64, exp: u64) -> Self {
+        let base = T::new();
+
+        if Self::is_valid(sig, exp, base.sig_range()) {
+            Self { sig, exp, base }
+        } else {
+            panic!(
+                "Unable to create BigNumBase with sig 
+0x{:x} and exp 
+{}
+min_sig:
+0x{:x},
+max_sig:
+0x{:x}",
+                sig,
+                exp,
+                base.sig_range().0,
+                base.sig_range().1
+            );
+        }
+    }
+
+    /// Returns true if the values are valid for the current base
+    fn is_valid(sig: u64, exp: u64, range: SigRange) -> bool {
         sig <= range.max() && (exp == 0 || sig >= range.min())
     }
 }
@@ -487,8 +619,6 @@ where
         Some(self.cmp(other))
     }
 }
-
-impl_for_types!(u64, u32, i32);
 
 impl<T> Add for BigNumBase<T>
 where
@@ -863,11 +993,11 @@ mod tests {
             BigNum::new_raw(0x8000_0000_0000_0000, 1)
         );
         assert_eq_bignum!(
-            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1) + 0x1u32,
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1) + 0x1u64,
             BigNum::new_raw(0xFFFF_FFFF_FFFF_FFFF, 1)
         );
         assert_eq_bignum!(
-            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1) + 0x2u32,
+            BigNum::new(0xFFFF_FFFF_FFFF_FFFF, 1) + 0x2u64,
             BigNum::new_raw(0x8000_0000_0000_0000, 2)
         );
     }
@@ -876,11 +1006,11 @@ mod tests {
     fn add_hex_test() {
         type BigNum = BigNumBase<Hexadecimal>;
         assert_eq_bignum!(
-            BigNum::from(0xFFFF_FFFF_FFFF_FFFFu64) + 1u32,
+            BigNum::from(0xFFFF_FFFF_FFFF_FFFFu64) + 1u64,
             BigNum::new_raw(0x1000_0000_0000_0000, 1)
         );
         assert_eq_bignum!(
-            BigNum::from(0xFFFF_FFFF_FFFF_FFFEu64) + 1u32,
+            BigNum::from(0xFFFF_FFFF_FFFF_FFFEu64) + 1u64,
             BigNum::new_raw(0xFFFF_FFFF_FFFF_FFFF, 0)
         );
         assert_eq_bignum!(
@@ -1101,29 +1231,5 @@ mod tests {
             BigNum::new(u64::MAX, 100) >> 105,
             BigNum::new(u64::MAX / 32, 0)
         );
-    }
-
-    #[test]
-    fn test_many_bases() {
-        // Not doing Binary or Hex since these tests assume max_sig + 1 fits in u64
-        //create_and_test_base!(Base61, 61);
-        //create_and_test_base!(Base11142, 11142);
-        //create_and_test_base!(Base942, 942);
-        //create_and_test_base!(Base3292, 3292);
-        //create_and_test_base!(Base1234, 1234);
-        //create_and_test_base!(Base5678, 5678);
-        //create_and_test_base!(Base9101, 9101);
-        //create_and_test_base!(Base2345, 2345);
-        //create_and_test_base!(Base6789, 6789);
-        //create_and_test_base!(Base1112, 1112);
-        //create_and_test_base!(Base3456, 3456);
-        //create_and_test_base!(Base7890, 7890);
-        //create_and_test_base!(Base1357, 1357);
-        //create_and_test_base!(Base2468, 2468);
-        //create_and_test_base!(Base65535, 65535);
-        //create_and_test_base!(Ternary, 3);
-
-        test_base!(Octal);
-        test_base!(Decimal);
     }
 }

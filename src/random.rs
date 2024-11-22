@@ -31,16 +31,14 @@ where
         let (low, high) = (*low.borrow(), *high.borrow());
 
         match low.cmp(&high) {
-            Ordering::Less => (),
+            Ordering::Less => Self {
+                base: T::new(),
+                low,
+                high,
+                inc: false,
+            },
             Ordering::Greater => panic!("Unable to create non-inclusive range with low > high"),
             Ordering::Equal => panic!("Unable to create non-inclusive range with low == high"),
-        }
-
-        Self {
-            base: T::new(),
-            low,
-            high,
-            inc: false,
         }
     }
 

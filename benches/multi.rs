@@ -1,3 +1,4 @@
+#![cfg(feature = "bench")]
 use std::{hint::black_box, iter::from_fn};
 
 use bignum::{
@@ -163,6 +164,5 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(bignumred_binary_sub_rand)
     });
 }
-
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);

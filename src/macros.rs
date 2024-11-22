@@ -1,4 +1,3 @@
-
 // Overriding it for better error messages
 #[macro_export]
 macro_rules! assert_eq_bignum {
@@ -33,6 +32,8 @@ max_exp:
     };
 }
 
+/// For a type `ty`, implement `From<$ty>, Add<$ty>, AddAssign<$ty>, ...`. Already used
+/// on `u64` but provided in case you want to use it on another type.
 #[macro_export]
 macro_rules! impl_for_types {
     ($($ty:ty),+) => {
@@ -43,7 +44,7 @@ macro_rules! impl_for_types {
                 }
             }
 
-            impl<T> Add<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::Add<$ty> for BigNumBase<T> where T: Base {
                 type Output = Self;
 
                 fn add(self, rhs: $ty) -> Self::Output {
@@ -51,7 +52,7 @@ macro_rules! impl_for_types {
                 }
             }
 
-            impl<T> Add<BigNumBase<T>> for $ty where T: Base {
+            impl<T> std::ops::Add<BigNumBase<T>> for $ty where T: Base {
                 type Output = BigNumBase<T>;
 
                 fn add(self, rhs: BigNumBase<T>) -> Self::Output {
@@ -59,13 +60,13 @@ macro_rules! impl_for_types {
                 }
             }
 
-            impl<T> AddAssign<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::AddAssign<$ty> for BigNumBase<T> where T: Base {
                 fn add_assign(&mut self, rhs: $ty) {
                     *self = *self + BigNumBase::from(rhs);
                 }
             }
 
-            impl<T> Sub<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::Sub<$ty> for BigNumBase<T> where T: Base {
                 type Output = Self;
 
                 fn sub(self, rhs: $ty) -> Self::Output {
@@ -73,7 +74,7 @@ macro_rules! impl_for_types {
                 }
             }
 
-            impl<T> Sub<BigNumBase<T>> for $ty where T: Base {
+            impl<T> std::ops::Sub<BigNumBase<T>> for $ty where T: Base {
                 type Output = BigNumBase<T>;
 
                 fn sub(self, rhs: BigNumBase<T>) -> Self::Output {
@@ -81,13 +82,13 @@ macro_rules! impl_for_types {
                 }
             }
 
-            impl<T> SubAssign<$ty> for BigNumBase<T> where T: Base {
+            impl<T> std::ops::SubAssign<$ty> for BigNumBase<T> where T: Base {
                 fn sub_assign(&mut self, rhs: $ty) {
                     *self = *self - BigNumBase::from(rhs);
                 }
             }
 
-            impl<T> Mul<$ty> for BigNumBase<T> where T:Base {
+            impl<T> std::ops::Mul<$ty> for BigNumBase<T> where T: Base {
                 type Output = Self;
 
                 fn mul(self, rhs: $ty) -> Self::Output {
@@ -95,7 +96,7 @@ macro_rules! impl_for_types {
                 }
             }
 
-            impl<T> Mul<BigNumBase<T>> for $ty where T:Base{
+            impl<T> std::ops::Mul<BigNumBase<T>> for $ty where T: Base{
                 type Output = BigNumBase<T>;
 
                 fn mul(self, rhs: BigNumBase<T>) -> Self::Output {
@@ -103,15 +104,50 @@ macro_rules! impl_for_types {
                 }
             }
 
-            impl<T> MulAssign<$ty> for BigNumBase<T> where T:Base {
+            impl<T> std::ops::MulAssign<$ty> for BigNumBase<T> where T: Base {
                 fn mul_assign(&mut self, rhs: $ty){
                     *self = *self * BigNumBase::from(rhs);
+                }
+            }
+
+            impl<T> std::ops::Div<$ty> for BigNumBase<T> where T: Base {
+                type Output = Self;
+
+                fn div(self, rhs: $ty) -> Self::Output {
+                    self / BigNumBase::from(rhs)
+                }
+            }
+
+            impl<T> std::ops::Div<BigNumBase<T>> for $ty where T: Base{
+                type Output = BigNumBase<T>;
+
+                fn div(self, rhs: BigNumBase<T>) -> Self::Output {
+                    BigNumBase::from(self) / rhs
+                }
+            }
+
+            impl<T> std::ops::DivAssign<$ty> for BigNumBase<T> where T: Base {
+                fn div_assign(&mut self, rhs: $ty){
+                    *self = *self / BigNumBase::from(rhs);
                 }
             }
         )+
     };
 }
 
+/// This macro creates a default `Base` implementation with a given name and number.
+///
+/// # Examples
+/// ```
+/// use bignum::{create_default_base, BigNumBase};
+///
+/// create_default_base!(Base83, 83);
+/// type BigNum = BigNumBase<Base83>;
+///
+/// let bn1 = BigNum::from(83);
+///
+/// assert_eq!(bn1 >> 1, BigNum::from(1));
+/// ```
 #[macro_export]
 macro_rules! create_default_base {
     ($name:ident, $num:literal) => {
@@ -143,7 +179,6 @@ macro_rules! create_default_base {
     };
 }
 
-#[macro_export]
 macro_rules! test_add {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -168,7 +203,6 @@ macro_rules! test_add {
     }};
 }
 
-#[macro_export]
 macro_rules! test_sub {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -193,7 +227,6 @@ macro_rules! test_sub {
     }};
 }
 
-#[macro_export]
 macro_rules! test_mul {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -223,7 +256,6 @@ macro_rules! test_mul {
     }};
 }
 
-#[macro_export]
 macro_rules! test_div {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -258,18 +290,17 @@ macro_rules! test_div {
                 / BigNum::new(min_sig, 112341234),
             BigNum::new(max_sig, 12341)
         );
-        //assert_eq_bignum!(
-        //    BigNum::new(min_sig, 1) * BigNum::new(min_sig + 1, 1241234),
-        //    BigNum::new(min_sig + 1, min_exp as u64 + 1 + 1241234)
-        //);
-        //assert_eq_bignum!(
-        //    BigNum::new(min_sig, 1) * BigNum::new(max_sig, 1241234),
-        //    BigNum::new(max_sig, min_exp as u64 + 1 + 1241234)
-        //);
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 12341234) / BigNum::new(min_sig, 1241234),
+            BigNum::new(min_sig, 12341234 - 1241234 - min_exp as u64)
+        );
+        assert_eq_bignum!(
+            BigNum::new(min_sig, 1) * BigNum::new(max_sig, 1241234),
+            BigNum::new(max_sig, min_exp as u64 + 1 + 1241234)
+        );
     }};
 }
 
-#[macro_export]
 macro_rules! test_succ {
     ($base:ident) => {{
         use $crate::traits::Succ;
@@ -286,7 +317,6 @@ macro_rules! test_succ {
     }};
 }
 
-#[macro_export]
 macro_rules! test_pred {
     ($base:ident) => {{
         use $crate::traits::Pred;
@@ -299,7 +329,6 @@ macro_rules! test_pred {
     }};
 }
 
-#[macro_export]
 macro_rules! test_shl {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -321,7 +350,6 @@ macro_rules! test_shl {
     }};
 }
 
-#[macro_export]
 macro_rules! test_shr {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -350,21 +378,19 @@ macro_rules! test_shr {
 }
 
 // Runs some non-base specific tests
-#[macro_export]
 macro_rules! test_base {
     ($base:ident) => {{
-        $crate::test_add!($base);
-        $crate::test_sub!($base);
-        $crate::test_mul!($base);
-        $crate::test_div!($base);
-        $crate::test_succ!($base);
-        $crate::test_pred!($base);
-        $crate::test_shl!($base);
-        $crate::test_shr!($base);
+        test_add!($base);
+        test_sub!($base);
+        test_mul!($base);
+        test_div!($base);
+        test_succ!($base);
+        test_pred!($base);
+        test_shl!($base);
+        test_shr!($base);
     }};
 }
 
-#[macro_export]
 macro_rules! create_and_test_base {
     ($base:ident, $num:literal) => {
         create_default_base!($base, $num);
@@ -374,8 +400,7 @@ macro_rules! create_and_test_base {
 
 #[cfg(test)]
 mod tests {
-    use crate::Base;
-    use crate::BigNumBase;
+    use crate::{Base, BigNumBase, Decimal, Octal, SigRange, ExpRange};
 
     #[test]
     fn default_base_test() {
@@ -394,5 +419,29 @@ mod tests {
             BigNum::new_raw(Base7::calculate_ranges().1 .1, 3)
         );
         assert_eq!(BigNum::new(u64::MAX, 0), BigNum::new(u64::MAX / 7, 1))
+    }
+
+    #[test]
+    fn test_many_bases() {
+        // Not doing Binary or Hex since these tests assume max_sig + 1 fits in u64
+        create_and_test_base!(Base61, 61);
+        create_and_test_base!(Base11142, 11142);
+        create_and_test_base!(Base942, 942);
+        create_and_test_base!(Base3292, 3292);
+        create_and_test_base!(Base1234, 1234);
+        create_and_test_base!(Base5678, 5678);
+        create_and_test_base!(Base9101, 9101);
+        create_and_test_base!(Base2345, 2345);
+        create_and_test_base!(Base6789, 6789);
+        create_and_test_base!(Base1112, 1112);
+        create_and_test_base!(Base3456, 3456);
+        create_and_test_base!(Base7890, 7890);
+        create_and_test_base!(Base1357, 1357);
+        create_and_test_base!(Base2468, 2468);
+        create_and_test_base!(Base65535, 65535);
+        create_and_test_base!(Ternary, 3);
+
+        test_base!(Octal);
+        test_base!(Decimal);
     }
 }

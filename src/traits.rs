@@ -2,13 +2,16 @@
 
 use crate::{Base, BigNumBase, SigRange};
 
-/// This trait is meant to get the very next value of the type. E.g. for BigNumBase<T>,
-/// adding 1 results in no change for numbers with `exp != 0`. So this provides the value
-/// that is greater than the current value, but less than any other
+/// This trait gets the very next valid value of a type. Mainly for `BigNum`, since adding
+/// one often doesn't result in a changing value. This is provided for contexts where you 
+/// need to increase the value easily
 pub trait Succ {
     fn succ(self) -> Self;
 }
 
+/// This trait gets the previous valid value of a type. Mainly for `BigNum`, since subbing
+/// one often doesn't result in a changing value. This is provided for contexts where you 
+/// need to decrease the value easily
 pub trait Pred {
     fn pred(self) -> Self;
 }
