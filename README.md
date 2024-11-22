@@ -3,6 +3,23 @@ A library that allows the creation of incredibly large numbers, but with a low
 memory/runtime footprint (relative to arbitrary-precision libraries). It accomplishes this
 by only storing up to 64 bits in the significand (similar to the floating point standard).
 
+## Inspiration/Why Did I Make This?
+The inspiration for this library was looking into idle/incremental games. These games
+almost always have some sort of exponential growth function and as a result often have to
+limit the number of items/buildings you can own to avoid overflowing the `f64` they store
+the value in. I want to be able to ignore this limit, hence this library. It's perfect for
+situations where you need to store an extremely large number but without the overhead of
+an arbitrary-precision library.
+
+## Goals
+My ultimate goal is to make this as close to a `u64` stand-in as possible. The user should
+be able to create them at the beginning of the program (or whenever they're needed), and
+then use them as if it was a standard `u64` price/score/etc. value. 
+
+As an addendum to the above I want it to be lightweight and performant. Users should be
+able to modify, create, and delete them at will without notable performance hits (to the
+extent that's possible).
+
 ## Usage
 Bases 2, 8, 10, and 16 are all pre-defined, and aliased to
 `BigNumBin, BigNumOct, BigNumDec, BigNumHex`. As an example, to create a binary `BigNum`
