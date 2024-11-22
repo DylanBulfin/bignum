@@ -1,7 +1,12 @@
 # BigNum
 A library that allows the creation of incredibly large numbers, but with a low
 memory/runtime footprint (relative to arbitrary-precision libraries). It accomplishes this
-by only storing up to 64 bits in the significand (similar to the floating point standard).
+by only storing up to 64 bits in the significand (similar to the floating point
+standard).
+
+## Links
+[docs.rs page](https://docs.rs/bignumbe-rs/latest/bignumbe_rs/)
+[crates.io page](https://crates.io/crates/bignumbe-rs)
 
 ## Inspiration/Why Did I Make This?
 The inspiration for this library was looking into idle/incremental games. These games
@@ -19,6 +24,13 @@ then use them as if it was a standard `u64` price/score/etc. value.
 As an addendum to the above I want it to be lightweight and performant. Users should be
 able to modify, create, and delete them at will without notable performance hits (to the
 extent that's possible).
+
+## Installation
+Add a dependecy to `bignumbe-rs` to `Cargo.toml` either directly or via `cargo add`. 
+
+Optionally, enabling the feature `random` adds a dependency on `rand` and some support for
+`Uniform` random generation of BigNums. The algorithm is very imperfect and was mainly
+meant for testing purposes, so it's not recommended to use it.
 
 ## Usage
 Bases 2, 8, 10, and 16 are all pre-defined, and aliased to
