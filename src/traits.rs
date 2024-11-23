@@ -72,10 +72,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_eq_bignum, create_default_base, BigNumBase, Binary};
+
+    use crate::{macros::assert_eq_bignum, BigNumBase, Binary};
 
     // Other tests are in the normal macro so we can test it with many different bases
-
     #[test]
     fn test_succ() {
         type BigNum = BigNumBase<Binary>;

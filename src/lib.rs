@@ -6,19 +6,20 @@
 
 use std::{
     cmp::Ordering,
-    fmt::{Debug, Display, Write},
+    fmt::{Debug, Display},
     ops::{Add, AddAssign, Div, Mul, MulAssign, Shl, Shr, Sub, SubAssign},
 };
 
 use consts::{
-    BIN_EXP_RANGE, BIN_POWERS, BIN_POWERS_U128, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_POWERS_U128, DEC_SIG_RANGE, HEX_EXP_RANGE, HEX_POWERS, HEX_POWERS_U128, HEX_SIG_RANGE, OCT_EXP_RANGE, OCT_POWERS, OCT_POWERS_U128, OCT_SIG_RANGE
+    BIN_EXP_RANGE, BIN_POWERS, BIN_POWERS_U128, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS,
+    DEC_POWERS_U128, DEC_SIG_RANGE, HEX_EXP_RANGE, HEX_POWERS, HEX_POWERS_U128, HEX_SIG_RANGE,
+    OCT_EXP_RANGE, OCT_POWERS, OCT_POWERS_U128, OCT_SIG_RANGE,
 };
 
 #[cfg(feature = "random")]
 pub mod random;
 
 pub(crate) mod consts;
-pub(crate) mod error;
 pub(crate) mod macros;
 
 pub mod traits;
@@ -968,7 +969,7 @@ impl Display for BigNumBase<Decimal> {
         if self.exp == 0 {
             // Precision specifier has special behavior on floats which is undesired
             // here. Want to force it to string and use the default behavior, e.g.
-            // a max-width setting. 
+            // a max-width setting.
             let mag = Decimal::get_mag(self.sig);
 
             if mag < 3 {
@@ -1012,6 +1013,8 @@ impl Display for BigNumBase<Decimal> {
 
 #[cfg(test)]
 mod tests {
+    use macros::assert_eq_bignum;
+
     use super::*;
     use crate::Binary;
 

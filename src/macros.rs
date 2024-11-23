@@ -1,5 +1,5 @@
-// Overriding it for better error messages
-#[macro_export]
+// For better error messages
+#[cfg(test)]
 macro_rules! assert_eq_bignum {
     ($lhs:expr, $rhs:expr) => {
         if $lhs != $rhs {
@@ -31,6 +31,8 @@ max_exp:
         }
     };
 }
+#[cfg(test)]
+pub(crate) use assert_eq_bignum;
 
 macro_rules! impl_for_types {
     ($($ty:ty),+) => {
@@ -177,6 +179,7 @@ macro_rules! create_default_base {
     };
 }
 
+#[cfg(test)]
 macro_rules! test_add {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -201,6 +204,7 @@ macro_rules! test_add {
     }};
 }
 
+#[cfg(test)]
 macro_rules! test_sub {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -225,6 +229,7 @@ macro_rules! test_sub {
     }};
 }
 
+#[cfg(test)]
 macro_rules! test_mul {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -254,6 +259,7 @@ macro_rules! test_mul {
     }};
 }
 
+#[cfg(test)]
 macro_rules! test_div {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -299,6 +305,7 @@ macro_rules! test_div {
     }};
 }
 
+#[cfg(test)]
 macro_rules! test_succ {
     ($base:ident) => {{
         use $crate::traits::Succ;
@@ -315,6 +322,7 @@ macro_rules! test_succ {
     }};
 }
 
+#[cfg(test)]
 macro_rules! test_pred {
     ($base:ident) => {{
         use $crate::traits::Pred;
@@ -327,6 +335,7 @@ macro_rules! test_pred {
     }};
 }
 
+#[cfg(test)]
 macro_rules! test_shl {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -348,6 +357,7 @@ macro_rules! test_shl {
     }};
 }
 
+#[cfg(test)]
 macro_rules! test_shr {
     ($base:ident) => {{
         type BigNum = BigNumBase<$base>;
@@ -376,6 +386,7 @@ macro_rules! test_shr {
 }
 
 // Runs some non-base specific tests
+#[cfg(test)]
 macro_rules! test_base {
     ($base:ident) => {{
         test_add!($base);
@@ -389,6 +400,7 @@ macro_rules! test_base {
     }};
 }
 
+#[cfg(test)]
 macro_rules! create_and_test_base {
     ($base:ident, $num:literal) => {
         create_default_base!($base, $num);
