@@ -42,6 +42,13 @@ to represent the formula `1234123223468 * 2^123422235`, do
 math operations between this value and a `u64` or another `BigNumBin`. For more examples
 check the page on `docs.rs` and the test code.
 
+## Debugging
+
+## The Math
+The main restriction we make in order to enable efficient arithmetic of any base is that,
+for any number where `exp != 0`, the significand is restricted to a single order of 
+magnitude. 
+
 ## Printing
 For now only decimal BigNum values have a default print method defined, and it works as 
 follows:

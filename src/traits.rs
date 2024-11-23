@@ -73,7 +73,7 @@ where
 mod tests {
     use super::*;
 
-    use crate::{macros::assert_eq_bignum, BigNumBase, Binary};
+    use crate::{macros::test_macros::assert_eq_bignum, BigNumBase, Binary};
 
     // Other tests are in the normal macro so we can test it with many different bases
     #[test]

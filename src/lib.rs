@@ -16,7 +16,7 @@ use consts::{
     OCT_EXP_RANGE, OCT_POWERS, OCT_POWERS_U128, OCT_SIG_RANGE,
 };
 
-#[cfg(feature = "random")]
+#[cfg(any(feature = "random", test))]
 pub mod random;
 
 pub(crate) mod consts;
@@ -524,7 +524,12 @@ where
             // that `sig / base.as_number() <= max_sig`
             Self {
                 sig: T::rshift(sig, 1),
-                exp: exp + 1,
+                exp: exp.checked_add(1).unwrap_or_else(|| {
+                    panic!(
+                        "Unable to create a BigNum with an exp of u64::MAX and a significand greater than max_sig = {}",
+                        max_sig
+                    )
+                }),
                 base,
             }
         } else if exp == 0 {
@@ -644,8 +649,10 @@ where
         let result = max.sig.wrapping_add(T::rshift(min.sig, shift as u32));
 
         let (sig, exp) = if result < max.sig {
-            // Wrapping occurred, handle it
-            (min_sig + T::rshift(result, 1), max.exp + 1)
+            // How much we need to add to the overflow result to make up for differences
+            // in the significand's range
+            let diff = u64::MAX - max_sig;
+            (min_sig + T::rshift(result + diff, 1), max.exp + 1)
         } else if T::NUMBER != 2 && result > max_sig {
             (T::rshift(result, 1), max.exp + 1)
         } else {
@@ -1013,7 +1020,11 @@ impl Display for BigNumBase<Decimal> {
 
 #[cfg(test)]
 mod tests {
-    use macros::assert_eq_bignum;
+    use macros::test_macros::assert_eq_bignum;
+    use rand::distributions::Uniform;
+    use rand::prelude::Distribution;
+    use rand::thread_rng;
+    use traits::Succ;
 
     use super::*;
     use crate::Binary;
@@ -1308,5 +1319,26 @@ mod tests {
         assert_eq!(format!("{}", BigNum::new(9999, 123523)), "9.999e123526");
         assert_eq!(format!("{}", BigNum::new(9099, 123523)), "9.099e123526");
         assert_eq!(format!("{}", BigNum::new(999, 123523)), "9.99e123525");
+    }
+
+    #[test]
+    fn test_random_bin() {
+        #![allow(clippy::erasing_op)]
+
+        type BigNum = BigNumBase<Binary>;
+
+        let dist: Uniform<BigNum> = Uniform::new(BigNum::from(0), BigNum::new(1, u64::MAX / 2));
+        let rng = &mut thread_rng();
+        let nums = dist.sample_iter(rng).take(100);
+
+        for n in nums {
+            assert_eq_bignum!(n + n, n * 2);
+            assert_eq_bignum!(n + n + n, n * BigNum::new(3, 0));
+            assert_eq_bignum!(2 * n + 2 * n, 4 * n);
+            assert_eq_bignum!(n / 2 / 16, n / 32);
+            assert_eq_bignum!(n * 0, n / (n.succ()));
+            assert_eq_bignum!(n + 0, n / 1);
+            assert_eq_bignum!(n / n, BigNum::from(1));
+        }
     }
 }

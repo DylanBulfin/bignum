@@ -11,7 +11,6 @@ pub struct BigNumSampler<T>
 where
     T: Base,
 {
-    base: T,
     low: BigNumBase<T>,
     high: BigNumBase<T>,
     inc: bool,
@@ -32,7 +31,6 @@ where
 
         match low.cmp(&high) {
             Ordering::Less => Self {
-                base: T::new(),
                 low,
                 high,
                 inc: false,
@@ -54,7 +52,6 @@ where
         }
 
         Self {
-            base: T::new(),
             low,
             high,
             inc: true,
