@@ -20,11 +20,12 @@ an arbitrary-precision library.
 ## Goals
 My ultimate goal is to make this as close to a `u64` stand-in as possible. The user should
 be able to create them at the beginning of the program (or whenever they're needed), and
-then use them as if it was a standard `u64` price/score/etc. value. 
+then use them as if they were a standard `u64` price/score/etc. value. 
 
 As an addendum to the above I want it to be lightweight and performant. Users should be
 able to modify, create, and delete them at will without notable performance hits (to the
-extent that's possible).
+extent that's possible). If they need to employ special management techniques (passing by
+reference, etc) they're hardly better than a heavier type.
 
 ## Installation
 Add a dependecy to `bignumbe-rs` to `Cargo.toml` either directly or via `cargo add`. 
@@ -40,6 +41,18 @@ to represent the formula `1234123223468 * 2^123422235`, do
 `BigNumBin::new(1234123223468, 123422235)`. Then you can freely apply any of the 4 standard
 math operations between this value and a `u64` or another `BigNumBin`. For more examples
 check the page on `docs.rs` and the test code.
+
+## Printing
+For now only decimal BigNum values have a default print method defined, and it works as 
+follows:
+- For numbers less than 1000, the number is printed as-is
+- For numbers between 1000 and 1 quadrillion they are printed as a float multiple of the 
+corresponding suffix. (`k` for thousands, followed by `m`, `b`, `t` for million, billion,
+trillion respectively). Up to 5 significant figures will be shown
+    - As an example, 999_999_999 is represented as `999.9m`, and 1_000_000 will be
+    represented as `1m`
+- For numbers 1 quadrillion and greater they are printed in standard scientific notation
+    - E.g. `999_999_999_999_999_999 = 9.999e17`
 
 ## Performance
 Here are a couple of results from benchmarking the current version. TL;DR it's probably

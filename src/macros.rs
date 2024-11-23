@@ -137,7 +137,7 @@ impl_for_types!(u64);
 ///
 /// # Examples
 /// ```
-/// use bignum::{create_default_base, BigNumBase};
+/// use bignumbe_rs::{create_default_base, BigNumBase};
 ///
 /// create_default_base!(Base83, 83);
 /// type BigNum = BigNumBase<Base83>;
@@ -398,7 +398,7 @@ macro_rules! create_and_test_base {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Base, BigNumBase, Decimal, Octal, SigRange, ExpRange};
+    use crate::{Base, BigNumBase, Decimal, ExpRange, Octal, SigRange};
 
     #[test]
     fn default_base_test() {

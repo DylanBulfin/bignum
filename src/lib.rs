@@ -6,7 +6,7 @@
 
 use std::{
     cmp::Ordering,
-    fmt::Debug,
+    fmt::{Debug, Display, Write},
     ops::{Add, AddAssign, Div, Mul, MulAssign, Shl, Shr, Sub, SubAssign},
 };
 
@@ -32,7 +32,7 @@ pub mod traits;
 ///
 /// # Examples
 /// ```
-/// use bignum::{ExpRange, Binary, Base};
+/// use bignumbe_rs::{ExpRange, Binary, Base};
 ///
 /// let ExpRange(min_exp, max_exp) = Binary::calculate_ranges().0;
 ///
@@ -69,7 +69,7 @@ impl ExpRange {
 ///
 /// # Examples
 /// ```
-/// use bignum::{SigRange, Binary, Base};
+/// use bignumbe_rs::{SigRange, Binary, Base};
 ///
 /// let SigRange(min_sig, max_sig) = Binary::calculate_ranges().1;
 ///
@@ -141,7 +141,7 @@ impl SigRange {
 /// The recommended format for
 /// a non-performance critical simple Base definition and implementation is:
 /// ```
-/// use bignum::{ExpRange, SigRange, Base};
+/// use bignumbe_rs::{ExpRange, SigRange, Base};
 ///
 /// #[derive(Clone, Copy, Debug)]
 /// pub struct Base13 {
@@ -467,7 +467,7 @@ impl Base for Decimal {
     }
 }
 
-/// This is the main struct for `bignumbe-rs`. 
+/// This is the main struct for `bignumbe-rs`.
 ///
 /// It takes a generic argument for the base, e.g.
 /// `BigNumBase<Binary>`. It is recommended to either create a custom type alias or
@@ -477,7 +477,7 @@ impl Base for Decimal {
 /// that the `From` implementation, like `new`, involves recalculating the base ranges.
 ///
 /// ```
-/// use bignum::{BigNumBase, Binary};
+/// use bignumbe_rs::{BigNumBase, Binary};
 ///
 /// type BigNum = BigNumBase<Binary>;
 ///
@@ -506,7 +506,7 @@ impl<T> BigNumBase<T>
 where
     T: Base,
 {
-    /// Creates a new `BigNumBase` instance that represents the value 
+    /// Creates a new `BigNumBase` instance that represents the value
     /// `sig * T::NUMBER^exp`. E.g. `BigNumBin::new(12341234, 12341)` represents
     /// `12341234 * 2^12341`. This method will perform normalization if necessary, to
     /// ensure the significand is in the valid range (if the number is non-compact). As
@@ -556,7 +556,7 @@ where
         }
     }
 
-    /// Creates a BigNumBase directly from values, panicking if not possible. This is 
+    /// Creates a BigNumBase directly from values, panicking if not possible. This is
     /// mostly for testing but may be more performant on inputs that are guaranteed valid
     pub fn new_raw(sig: u64, exp: u64) -> Self {
         let base = T::new();
@@ -965,6 +965,53 @@ where
     }
 }
 
+impl Display for BigNumBase<Decimal> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.exp == 0 {
+            // Precision specifier has special behavior on floats which is undesired
+            // here. Want to force it to string and use the default behavior, e.g.
+            // a max-width setting. 
+            let mag = Decimal::get_mag(self.sig);
+
+            if mag < 3 {
+                f.write_fmt(format_args!("{}", self.sig))
+            } else if mag < 6 {
+                f.write_fmt(format_args!("{0:.5}k", (self.sig as f64 / 1e3).to_string()))
+            } else if mag < 9 {
+                f.write_fmt(format_args!("{0:.5}m", (self.sig as f64 / 1e6).to_string()))
+            } else if mag < 12 {
+                f.write_fmt(format_args!("{0:.5}b", (self.sig as f64 / 1e9).to_string()))
+            } else if mag < 15 {
+                f.write_fmt(format_args!(
+                    "{0:.5}t",
+                    (self.sig as f64 / 1e12).to_string()
+                ))
+            } else {
+                let res = (self.sig as f64) / 10f64.powi(mag as i32);
+
+                if res == 10.0 {
+                    f.write_fmt(format_args!("9.999e{}", mag))
+                } else {
+                    f.write_fmt(format_args!("{0:.5}e{1}", res.to_string(), mag))
+                }
+            }
+        } else {
+            let min_exp = self.base.exp_range().min();
+            let res = (self.sig as f64) / 10f64.powi(min_exp as i32);
+
+            if res == 10.0 {
+                f.write_fmt(format_args!("9.999e{}", min_exp as u64 + self.exp))
+            } else {
+                f.write_fmt(format_args!(
+                    "{0:.5}e{1}",
+                    res.to_string(),
+                    min_exp as u64 + self.exp
+                ))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1234,5 +1281,31 @@ mod tests {
             BigNum::new(u64::MAX, 100) >> 105,
             BigNum::new(u64::MAX / 32, 0)
         );
+    }
+
+    #[test]
+    fn display_test() {
+        type BigNum = BigNumBase<Decimal>;
+
+        assert_eq!(format!("{}", BigNum::from(1)), "1");
+        assert_eq!(format!("{}", BigNum::from(999)), "999");
+        assert_eq!(format!("{}", BigNum::from(1000)), "1k");
+        assert_eq!(format!("{}", BigNum::from(1001)), "1.001k");
+        assert_eq!(format!("{}", BigNum::from(999999)), "999.9k");
+        assert_eq!(format!("{}", BigNum::from(1000000)), "1m");
+        assert_eq!(format!("{}", BigNum::from(1001000)), "1.001m");
+        assert_eq!(format!("{}", BigNum::from(999999999)), "999.9m");
+        assert_eq!(format!("{}", BigNum::from(1000000000)), "1b");
+        assert_eq!(format!("{}", BigNum::from(1001000000)), "1.001b");
+        assert_eq!(format!("{}", BigNum::from(999999999999)), "999.9b");
+        assert_eq!(format!("{}", BigNum::from(1000000000000)), "1t");
+        assert_eq!(format!("{}", BigNum::from(1001000000000)), "1.001t");
+        assert_eq!(format!("{}", BigNum::from(999999999999999)), "999.9t");
+        assert_eq!(format!("{}", BigNum::from(1000000000000000)), "1e15");
+        assert_eq!(format!("{}", BigNum::from(1001000000000000)), "1.001e15");
+        assert_eq!(format!("{}", BigNum::from(999999999999999999)), "9.999e17");
+        assert_eq!(format!("{}", BigNum::new(9999, 123523)), "9.999e123526");
+        assert_eq!(format!("{}", BigNum::new(9099, 123523)), "9.099e123526");
+        assert_eq!(format!("{}", BigNum::new(999, 123523)), "9.99e123525");
     }
 }
