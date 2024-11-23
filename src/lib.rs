@@ -7,6 +7,7 @@
 use std::{
     cmp::Ordering,
     fmt::{Debug, Display},
+    iter::{Product, Sum},
     ops::{Add, AddAssign, Div, Mul, MulAssign, Shl, Shr, Sub, SubAssign},
 };
 
@@ -588,6 +589,21 @@ max_sig:
     fn is_valid(sig: u64, exp: u64, range: SigRange) -> bool {
         sig <= range.max() && (exp == 0 || sig >= range.min())
     }
+
+    /// Allows fuzzy comparison between two values. Since operations can result in loss of
+    /// precision this allows you to compare values that may have drifted. Since each
+    /// operation can result in an error of 1, an upper bound is the sum of the number of
+    /// operations performed on each operand. E.g. for `n: BigNumDec`, to ensure that
+    /// (n * 1000) / 500 = (n / 500) * 1000, you might use a margin of 4
+    pub fn fuzzy_eq(self, other: Self, margin: u64) -> bool {
+        let (min, max) = if self > other {
+            (other, self)
+        } else {
+            (self, other)
+        };
+
+        max.exp == min.exp && max.sig - min.sig <= margin
+    }
 }
 
 impl<T> PartialEq for BigNumBase<T>
@@ -971,6 +987,32 @@ where
     }
 }
 
+impl<T> Sum for BigNumBase<T>
+where
+    T: Base,
+{
+    fn sum<I: Iterator<Item = Self>>(mut iter: I) -> Self {
+        if let Some(elem) = iter.next() {
+            iter.fold(elem, |acc, n| acc + n)
+        } else {
+            Self::from(0)
+        }
+    }
+}
+
+impl<T> Product for BigNumBase<T>
+where
+    T: Base,
+{
+    fn product<I: Iterator<Item = Self>>(mut iter: I) -> Self {
+        if let Some(elem) = iter.next() {
+            iter.fold(elem, |acc, n| acc * n)
+        } else {
+            Self::from(0)
+        }
+    }
+}
+
 impl Display for BigNumBase<Decimal> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.exp == 0 {
@@ -1020,6 +1062,8 @@ impl Display for BigNumBase<Decimal> {
 
 #[cfg(test)]
 mod tests {
+    use std::iter::repeat_n;
+
     use macros::test_macros::assert_eq_bignum;
     use rand::distributions::Uniform;
     use rand::prelude::Distribution;
@@ -1340,5 +1384,77 @@ mod tests {
             assert_eq_bignum!(n + 0, n / 1);
             assert_eq_bignum!(n / n, BigNum::from(1));
         }
+    }
+
+    #[test]
+    fn sum_test_binary() {
+        type BigNum = BigNumBin;
+
+        let a: [BigNum; 0] = [];
+        let b: [BigNum; 10] = [BigNum::from(100); 10];
+        let c = (0u64..100).map(BigNum::from);
+        let d: [BigNum; 100] = [BigNum::from(1 << 63); 100];
+
+        assert_eq!(BigNum::from(0), a.into_iter().sum());
+        assert_eq!(BigNum::from(1000), b.into_iter().sum());
+        assert_eq!(BigNum::from(4950), c.sum());
+
+        assert_eq!(BigNum::from(1 << 63) * 100, d.into_iter().sum());
+    }
+
+    #[test]
+    fn prod_test_binary() {
+        type BigNum = BigNumBin;
+
+        let a: [BigNum; 0] = [];
+        let b: [BigNum; 10] = [BigNum::from(2); 10];
+        let c: [BigNum; 10] = [BigNum::from(8); 10];
+        let d: [BigNum; 100] = [BigNum::from(1 << 63); 100];
+
+        assert_eq!(BigNum::from(0), a.into_iter().product());
+        assert_eq!(BigNum::from(1024), b.into_iter().product());
+        assert_eq!(BigNum::from(1024 * 1024 * 1024), c.into_iter().product());
+
+        assert_eq!(BigNum::new(1, 63 * 100), d.into_iter().product());
+    }
+
+    #[should_panic]
+    #[test]
+    fn fuzzy_eq_failed1() {
+        type BigNum = BigNumDec;
+
+        let a = BigNum::new(DEC_SIG_RANGE.1, 234);
+        let b = a + a + a + a + a;
+        let c = 2 * a + 3 * a;
+
+        assert_eq!(b, c);
+    }
+
+    #[should_panic]
+    #[test]
+    fn fuzzy_eq_failed2() {
+        type BigNum = BigNumDec;
+
+        let a = BigNum::new(DEC_SIG_RANGE.1, 234);
+        let d: BigNum = repeat_n(a, 20).sum();
+        let e = a * 20;
+
+        assert_eq!(d, e)
+    }
+
+    #[test]
+    fn fuzzy_eq_test() {
+        type BigNum = BigNumDec;
+
+        let a = BigNum::new(DEC_SIG_RANGE.1, 234);
+        let b = a + a + a + a + a;
+        let c = 2 * a + 3 * a;
+        let d: BigNum = repeat_n(a, 20).sum();
+        let e = a * 20;
+
+        // Since we apply 4 operations to b this is a good upper bound
+        assert!(b.fuzzy_eq(c, 4));
+        // Since we apply 20 operations to d this is a good upper bound
+        assert!(d.fuzzy_eq(e, 20));
     }
 }

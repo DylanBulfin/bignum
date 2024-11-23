@@ -43,11 +43,51 @@ math operations between this value and a `u64` or another `BigNumBin`. For more 
 check the page on `docs.rs` and the test code.
 
 ## Debugging
+Since the math is a little odd some of the behaviors may not be obvious. Below are some of
+the more odd aspects that may prove useful to know when debugging:
+- When the base you're using is not a power of a power of 2 (such as Binary or
+Hexadecimal), wrapping of the significand will not occur at the bounds of `u64`. So,
+`BigNumBase<Decimal>::new(u64::MAX, 0).exp != 0`. The reason for this is explained in the
+math section below. Basically, avoid relying on the specific way a value is represented.
+- All math operations have the potential to result in loss of data. That is, `(a * b) / 2` 
+does not necessarily evaluate the same as `a/2 + b/2`. You should not rely on the exact
+equality of chained operations like this. If you must compare them do it fuzzily, checking
+whether the difference between the two is within a certain threshold.
+- An addendum to the above: differences between large `BigNum` values are imprecise.
+    - E.g. `BigNumDec::new(10.pow(18) + 1, 100) - BigNumDec::new(10.pow(18), 100) = 
+    BigNum::new(1, 100)`. So if you want to check closeness see the section below.
+
+
+### Drifting
+When applying sequences of functions that should result in the same value, there is some
+inherent loss of precision in this design. If I'm correct, though, the significand should
+drift from the "correct" answer by at most 1 on any given operation. So we define a
+special function `eq_fuzzy(self, other: BigNum, margin: u64) -> bool` which checks if 
+the  difference between the significands of the input numbers is greater than `margin`.
+To get an estimate for the margin, count the max number of operations applied to its
+arguments (see docs for this function for more details).
 
 ## The Math
 The main restriction we make in order to enable efficient arithmetic of any base is that,
 for any number where `exp != 0`, the significand is restricted to a single order of 
-magnitude. 
+magnitude. That is for a base `b`, unless `b` is a power of a power of 2 
+`(2, 4, 16, 256, ...)`, we find the highest power `x` of `b` such that `b^x <= u64::MAX`.
+We then restrict the significand to `[b^(x - 1), b^x - 1]`. For example:
+- Decimal: `[1_000_000_000_000_000_000, 9_999_999_999_999_999_999]`
+- Octal: `[0o1_0000_0000_0000_0000_0000, 0o7_7777_7777_7777_7777_7777]`
+If the significand goes above this range we divide by `b` and add one to the `exp` field.
+Similarly, if the significand goes below this range we similarly multiply by `b` and subtract one
+from the `exp` field
+
+If at any point the number is less than the smallest value of the range calculated above,
+we treat it as 'compact'. We just store the value as-is with an `exp` of 0. In the
+examples below assume `type BigNum = BigNumBase<Decimal>`
+- E.g. `BigNum::new(9_999_999_999_999_999_999, 0) + 1 =
+BigNum::new(1_000_000_000_000_000_000, 1)`
+- Also `BigNum::new(1_000_000_000_000_000_000, 1) - 1 =
+BigNum::new(9_999_999_999_999_999_999, 0)`
+- And `BigNum::new(1_000_000_000_000_000_000, 0) - 1 =
+BigNum::new(999_999_999_999_999_999, 0)` 
 
 ## Printing
 For now only decimal BigNum values have a default print method defined, and it works as 

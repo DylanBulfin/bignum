@@ -5,7 +5,7 @@ pub mod test_macros {
         ($lhs:expr, $rhs:expr) => {{
             let (max, min) = if $rhs > $lhs {($rhs, $lhs)} else {($lhs, $rhs)};
 
-            if max.exp != min.exp || max.sig - min.sig > max.base.as_number() as u64 {
+            if !max.fuzzy_eq(min, max.base.as_number() as u64) {
                 panic!("assertion failed: 
     sig:
     0x{:x} 
@@ -37,8 +37,10 @@ pub mod test_macros {
 
     // For better error messages
     macro_rules! assert_eq_bignum {
-        ($lhs:expr, $rhs:expr) => {
-            if $lhs != $rhs {
+        ($lhs:expr, $rhs:expr) => {{
+            let (lhs, rhs) = ($lhs, $rhs);
+
+            if lhs != rhs {
                 panic!("assertion failed: 
     sig:
     0x{:x} 
@@ -62,10 +64,10 @@ pub mod test_macros {
     max_exp:
     {}
     "
-            , $lhs.sig,
-            $rhs.sig, $lhs.exp, $rhs.exp, $lhs.base.as_number(), $lhs.base.sig_range().min(), $lhs.base.sig_range().max(), $lhs.base.exp_range().min(), $lhs.base.exp_range().max());
+            , lhs.sig,
+            rhs.sig, lhs.exp, rhs.exp, lhs.base.as_number(), lhs.base.sig_range().min(), lhs.base.sig_range().max(), lhs.base.exp_range().min(), lhs.base.exp_range().max());
             }
-        };
+        }};
     }
 
     macro_rules! test_add {
@@ -204,18 +206,9 @@ pub mod test_macros {
             type BigNum = BigNumBase<$base>;
             let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
 
-            assert_eq_bignum!(
-                BigNum::new(0, 0).succ(),
-                BigNum::new(1, 0)
-            );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 0).succ(),
-                BigNum::new(min_sig, 1)
-            );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 1).succ(),
-                BigNum::new(min_sig, 2)
-            );
+            assert_eq_bignum!(BigNum::new(0, 0).succ(), BigNum::new(1, 0));
+            assert_eq_bignum!(BigNum::new(max_sig, 0).succ(), BigNum::new(min_sig, 1));
+            assert_eq_bignum!(BigNum::new(max_sig, 1).succ(), BigNum::new(min_sig, 2));
             assert_eq_bignum!(
                 BigNum::new(max_sig, 2143124).succ(),
                 BigNum::new(min_sig, 2143125)
@@ -229,18 +222,9 @@ pub mod test_macros {
             type BigNum = BigNumBase<$base>;
             let SigRange(min_sig, max_sig) = $base::calculate_ranges().1;
 
-            assert_eq_bignum!(
-                BigNum::new(1, 0).pred(),
-                BigNum::new(0, 0)
-            );
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 1).pred(),
-                BigNum::new(max_sig, 0)
-            );
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 2).pred(),
-                BigNum::new(max_sig, 1)
-            );
+            assert_eq_bignum!(BigNum::new(1, 0).pred(), BigNum::new(0, 0));
+            assert_eq_bignum!(BigNum::new(min_sig, 1).pred(), BigNum::new(max_sig, 0));
+            assert_eq_bignum!(BigNum::new(min_sig, 2).pred(), BigNum::new(max_sig, 1));
         }};
     }
 
@@ -257,26 +241,11 @@ pub mod test_macros {
                 BigNum::new(124, 0) << 2,
                 BigNum::new(124 * ($base::NUMBER as u64).pow(2), 0)
             );
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 1) << 1,
-                BigNum::new(min_sig, 2)
-            );
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 2) << 1,
-                BigNum::new(min_sig, 3)
-            );
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 100) << 100,
-                BigNum::new(min_sig, 200)
-            );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 3) << 4,
-                BigNum::new(max_sig, 7)
-            );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 23) << 1243,
-                BigNum::new(max_sig, 1266)
-            );
+            assert_eq_bignum!(BigNum::new(min_sig, 1) << 1, BigNum::new(min_sig, 2));
+            assert_eq_bignum!(BigNum::new(min_sig, 2) << 1, BigNum::new(min_sig, 3));
+            assert_eq_bignum!(BigNum::new(min_sig, 100) << 100, BigNum::new(min_sig, 200));
+            assert_eq_bignum!(BigNum::new(max_sig, 3) << 4, BigNum::new(max_sig, 7));
+            assert_eq_bignum!(BigNum::new(max_sig, 23) << 1243, BigNum::new(max_sig, 1266));
         }};
     }
 
@@ -293,14 +262,8 @@ pub mod test_macros {
                 BigNum::new(12412341324, 0) >> 2,
                 BigNum::new(12412341324 / ($base::NUMBER as u64).pow(2), 0)
             );
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 1) >> 1,
-                BigNum::new(min_sig, 0)
-            );
-            assert_eq_bignum!(
-                BigNum::new(min_sig, 2) >> 1,
-                BigNum::new(min_sig, 1)
-            );
+            assert_eq_bignum!(BigNum::new(min_sig, 1) >> 1, BigNum::new(min_sig, 0));
+            assert_eq_bignum!(BigNum::new(min_sig, 2) >> 1, BigNum::new(min_sig, 1));
             assert_eq_bignum!(
                 BigNum::new(min_sig, 100) >> 102,
                 BigNum::new(min_sig / ($base::NUMBER as u64).pow(2), 0)
@@ -309,10 +272,7 @@ pub mod test_macros {
                 BigNum::new(max_sig, 3) >> 4,
                 BigNum::new(max_sig / $base::NUMBER as u64, 0)
             );
-            assert_eq_bignum!(
-                BigNum::new(max_sig, 1266) >> 1243,
-                BigNum::new(max_sig, 23)
-            );
+            assert_eq_bignum!(BigNum::new(max_sig, 1266) >> 1243, BigNum::new(max_sig, 23));
         }};
     }
 
@@ -350,6 +310,39 @@ pub mod test_macros {
         }};
     }
 
+    macro_rules! test_sum {
+        ($base:ident) => {{
+            type BigNum = BigNumBase<$base>;
+            let base = $base::NUMBER as u64;
+
+            let a: [BigNum; 10] = [BigNum::from(base); 10];
+            let b: [BigNum; 10] = [BigNum::from(1); 10];
+
+            assert_eq_bignum!(BigNum::from(base * 10), a.into_iter().sum::<BigNum>());
+            assert_eq_bignum!(BigNum::from(10), b.into_iter().sum::<BigNum>());
+        }};
+    }
+
+    macro_rules! test_prod {
+        ($base:ident) => {{
+            type BigNum = BigNumBase<$base>;
+            let base = $base::NUMBER as u64;
+            let min_sig = $base::calculate_ranges().1.min();
+            let min_exp = $base::calculate_ranges().0.min();
+
+            let a: [BigNum; 10] = [BigNum::from(base); 10];
+            let b: [BigNum; 10] = [BigNum::from(1); 10];
+            let c: [BigNum; 10] = [BigNum::from(min_sig); 10];
+
+            assert_eq_bignum!(BigNum::new(1, 10), a.into_iter().product::<BigNum>());
+            assert_eq_bignum!(BigNum::from(1), b.into_iter().product::<BigNum>());
+            assert_eq_bignum!(
+                BigNum::new(1, min_exp as u64 * 10),
+                c.into_iter().product::<BigNum>()
+            );
+        }};
+    }
+
     // Runs some non-base specific tests
     macro_rules! test_base {
         ($base:ident) => {{
@@ -362,6 +355,8 @@ pub mod test_macros {
             test_shl!($base);
             test_shr!($base);
             test_relations!($base);
+            test_sum!($base);
+            test_prod!($base);
         }};
     }
 
@@ -374,7 +369,7 @@ pub mod test_macros {
 
     #[test]
     fn test_many_bases() {
-        use crate::{BigNumBase, Base, Decimal, Octal, ExpRange, SigRange};
+        use crate::{Base, BigNumBase, Decimal, ExpRange, Octal, SigRange};
         // Not doing Binary or Hex since these tests assume max_sig + 1 fits in u64
         create_and_test_base!(Base61, 61);
         create_and_test_base!(Base11142, 11142);
