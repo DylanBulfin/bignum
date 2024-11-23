@@ -11,8 +11,7 @@ use std::{
 };
 
 use consts::{
-    BIN_EXP_RANGE, BIN_POWERS, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_SIG_RANGE,
-    HEX_EXP_RANGE, HEX_POWERS, HEX_SIG_RANGE,
+    BIN_EXP_RANGE, BIN_POWERS, BIN_POWERS_U128, BIN_SIG_RANGE, DEC_EXP_RANGE, DEC_POWERS, DEC_POWERS_U128, DEC_SIG_RANGE, HEX_EXP_RANGE, HEX_POWERS, HEX_POWERS_U128, HEX_SIG_RANGE, OCT_EXP_RANGE, OCT_POWERS, OCT_POWERS_U128, OCT_SIG_RANGE
 };
 
 #[cfg(feature = "random")]
@@ -322,12 +321,11 @@ impl Base for Binary {
     }
 
     fn pow(exp: u32) -> u64 {
-        //1 << exp
         BIN_POWERS[exp as usize]
     }
 
     fn pow_u128(exp: u32) -> u128 {
-        1 << exp
+        BIN_POWERS_U128[exp as usize]
     }
 
     fn rshift(lhs: u64, exp: u32) -> u64 {
@@ -363,19 +361,19 @@ impl Base for Octal {
     }
 
     fn exp_range(&self) -> ExpRange {
-        ExpRange(20, 21)
+        ExpRange::from(OCT_EXP_RANGE)
     }
 
     fn sig_range(&self) -> SigRange {
-        SigRange(1 << 60, (1 << 63) - 1)
+        SigRange::from(OCT_SIG_RANGE)
     }
 
     fn pow(exp: u32) -> u64 {
-        1 << (3 * exp)
+        OCT_POWERS[exp as usize]
     }
 
     fn pow_u128(exp: u32) -> u128 {
-        1 << (3 * exp)
+        OCT_POWERS_U128[exp as usize]
     }
 
     fn rshift(lhs: u64, exp: u32) -> u64 {
@@ -403,22 +401,19 @@ impl Base for Hexadecimal {
     }
 
     fn exp_range(&self) -> ExpRange {
-        //ExpRange(15, 16)
         ExpRange::from(HEX_EXP_RANGE)
     }
 
     fn sig_range(&self) -> SigRange {
-        //SigRange(1 << 60, u64::MAX)
         SigRange::from(HEX_SIG_RANGE)
     }
 
     fn pow(exp: u32) -> u64 {
-        //1 << (exp << 2)
         HEX_POWERS[exp as usize]
     }
 
     fn pow_u128(exp: u32) -> u128 {
-        1 << (exp << 2)
+        HEX_POWERS_U128[exp as usize]
     }
 
     fn lshift(lhs: u64, exp: u32) -> u64 {
@@ -438,7 +433,6 @@ impl Base for Hexadecimal {
     }
 }
 
-// TODO extend power tables to support u128
 impl Base for Decimal {
     const NUMBER: u16 = 10;
 
@@ -456,6 +450,10 @@ impl Base for Decimal {
 
     fn pow(exp: u32) -> u64 {
         DEC_POWERS[exp as usize]
+    }
+
+    fn pow_u128(exp: u32) -> u128 {
+        DEC_POWERS_U128[exp as usize]
     }
 
     fn get_mag(sig: u64) -> u32 {
