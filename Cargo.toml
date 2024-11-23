@@ -1,8 +1,10 @@
 [package]
 name = "bignumbe-rs"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = "Large, medium-precision numbers"
+repository = "https://github.com/DylanBulfin/bignumbe-rs"
+documentation = "https://docs.rs/bignumbe-rs/latest/bignumbe_rs"
 license = "GPL-3.0"
 
 [features]
