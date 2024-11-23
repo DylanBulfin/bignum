@@ -51,7 +51,8 @@ corresponding suffix. (`k` for thousands, followed by `m`, `b`, `t` for million,
 trillion respectively). Up to 5 significant figures will be shown
     - As an example, 999_999_999 is represented as `999.9m`, and 1_000_000 will be
     represented as `1m`
-- For numbers 1 quadrillion and greater they are printed in standard scientific notation
+- For numbers 1 quadrillion and greater they are printed in standard (normalized) 
+scientific notation
     - E.g. `999_999_999_999_999_999 = 9.999e17`
 
 ## Performance
