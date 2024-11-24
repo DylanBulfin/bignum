@@ -42,6 +42,20 @@ to represent the formula `1234123223468 * 2^123422235`, do
 math operations between this value and a `u64` or another `BigNumBin`. For more examples
 check the page on `docs.rs` and the test code.
 
+### Float Multiplication
+Since idle games involve a lot of multiplying costs by ratios, often tens or hundreds of
+times, it makes sense to allow the user to multiply `BigNum` by `f64`. This way we can use
+the closed formula for geometric sequence sums. This operation is even more an estimate
+than normal math operations but should be good enough for most purposes.
+- E.g. if the formula that describes a building's cost per step is `c(n) = a * r^(n-1)`,
+  the formula that gives the sum of the first 100 terms is `a * (r^n - 1) / (r - 1)`. For
+  a sequence like this calculating it via this formula is much more accurate than
+  calculating each step directly, since errors are magnified
+    - For example, an addition can only cause a drift of 1, but multiplying this result by
+      1000 not only can cause its own drift but multiplies any existing drift by the same 
+      amount. This means that long sequences of operations can result in dramatic 
+      drifting.
+
 ## Debugging
 Since the math is a little odd some of the behaviors may not be obvious. Below are some of
 the more odd aspects that may prove useful to know when debugging:
@@ -60,12 +74,11 @@ whether the difference between the two is within a certain threshold.
 
 ### Drifting
 When applying sequences of functions that should result in the same value, there is some
-inherent loss of precision in this design. If I'm correct, though, the significand should
-drift from the "correct" answer by at most 1 on any given operation. So we define a
-special function `eq_fuzzy(self, other: BigNum, margin: u64) -> bool` which checks if 
-the  difference between the significands of the input numbers is greater than `margin`.
-To get an estimate for the margin, count the max number of operations applied to its
-arguments (see docs for this function for more details).
+inherent loss of precision in this design. So we define a special function 
+`eq_fuzzy(self, other: BigNum, margin: u64) -> bool` which checks if the  difference 
+between the significands of the input numbers is greater than `margin`. To get an estimate 
+for the margin, count the max number of operations applied to its arguments (see docs for 
+this function for more details).
 
 ## The Math
 The main restriction we make in order to enable efficient arithmetic of any base is that,

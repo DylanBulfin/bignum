@@ -1060,6 +1060,34 @@ impl Display for BigNumBase<Decimal> {
     }
 }
 
+impl<T> Mul<f64> for BigNumBase<T>
+where
+    T: Base,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        let cutoff_exp = self.base.exp_range().min() / 2;
+        let cutoff = T::pow(cutoff_exp);
+        if rhs > cutoff as f64 {
+            // Anything after the decimal point won't make a significant difference in
+            // the total
+            self * (rhs.ceil() as u64)
+        } else {
+            (self * (rhs * cutoff as f64).ceil() as u64) / cutoff
+        }
+    }
+}
+
+impl<T> MulAssign<f64> for BigNumBase<T>
+where
+    T: Base,
+{
+    fn mul_assign(&mut self, rhs: f64) {
+        *self = *self * rhs;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::iter::repeat_n;
@@ -1456,5 +1484,21 @@ mod tests {
         assert!(b.fuzzy_eq(c, 4));
         // Since we apply 20 operations to d this is a good upper bound
         assert!(d.fuzzy_eq(e, 20));
+    }
+
+    #[test]
+    fn float_mult_test() {
+        type BigNum = BigNumDec;
+
+        let a = BigNum::new(DEC_SIG_RANGE.0, 1234);
+        let b = BigNum::new(DEC_SIG_RANGE.1, 1234);
+
+        assert_eq!(a * 1.5, a * 3 / 2);
+        assert_eq!(a * 12.5, a * 100 / 8);
+        assert_eq!(a * 0.5, a / 2);
+
+        assert_eq!(b * 1.5, b * 3 / 2);
+        assert_eq!(b * 12.5, b * 100 / 8);
+        assert_eq!(b * 0.5, b / 2);
     }
 }
