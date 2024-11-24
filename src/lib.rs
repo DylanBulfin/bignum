@@ -1067,12 +1067,20 @@ where
     type Output = Self;
 
     fn mul(self, rhs: f64) -> Self::Output {
-        let cutoff_exp = self.base.exp_range().min() / 2;
+        let min_exp = self.base.exp_range().min();
+        let cutoff_exp = min_exp / 2;
         let cutoff = T::pow(cutoff_exp);
         if rhs > cutoff as f64 {
-            // Anything after the decimal point won't make a significant difference in
-            // the total
-            self * (rhs.ceil() as u64)
+            if rhs > u64::MAX as f64 {
+                let mag = rhs.log(T::NUMBER as f64).floor() as u64;
+                let diff = mag - min_exp as u64;
+
+                self * Self::new((rhs / (T::NUMBER as f64).powi(diff as i32)) as u64, diff)
+            } else {
+                // Anything after the decimal point won't make a significant difference in
+                // the total
+                self * (rhs.ceil() as u64)
+            }
         } else {
             (self * (rhs * cutoff as f64).ceil() as u64) / cutoff
         }
@@ -1497,8 +1505,31 @@ mod tests {
         assert_eq!(a * 12.5, a * 100 / 8);
         assert_eq!(a * 0.5, a / 2);
 
+        // Result of adding a to a float that doesn't fit in u64 bounds
+        let a_overflow_res = a * 1e250;
+        let a_exp_res = a * BigNum::new(1, 250);
+        let (min, max) = if a_overflow_res > a_exp_res {
+            (a_exp_res, a_overflow_res)
+        } else {
+            (a_overflow_res, a_exp_res)
+        };
+
+        // Error in result is less than 1/100000 = .001%
+        assert!(max / (max - min) > BigNum::from(100000));
+
         assert_eq!(b * 1.5, b * 3 / 2);
         assert_eq!(b * 12.5, b * 100 / 8);
         assert_eq!(b * 0.5, b / 2);
+
+        let b_overflow_res = b * 1.234e280;
+        let b_exp_res = b * BigNum::new(1234, 277);
+        let (min, max) = if b_overflow_res > b_exp_res {
+            (b_exp_res, b_overflow_res)
+        } else {
+            (b_overflow_res, b_exp_res)
+        };
+
+        // Error in result is less than 1/100000 = .001%
+        assert!(max / (max - min) > BigNum::from(100000));
     }
 }
