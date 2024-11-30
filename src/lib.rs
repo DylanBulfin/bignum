@@ -25,7 +25,7 @@ pub(crate) mod macros;
 
 pub mod traits;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// This represents the non-inclusive range of exponents that constitute a valid
 /// non-compact significand in the given base. You only need to use this if manually
 /// defining a custom base (if performance is non-critical I would recommend using the
@@ -62,7 +62,7 @@ impl ExpRange {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// This represents the inclusive range of values that constitute a valid non-compact
 /// significand in the given base. You only need to use this if manually defining a custom
 /// base (if performance is non-critical I would recommend using the `create_default_base`

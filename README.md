@@ -9,6 +9,12 @@ standard).
 
 [crates.io page](https://crates.io/crates/bignumbe-rs)
 
+## Status
+I think it is basically feature-complete at this point. I may add a couple of things since
+I'm using it in another project and might identify pain points (this is how float
+multiplication came to be). But other than that I will only be adding tests and fixing
+bugs. If anyone notices any bugs feel free to create an issue and I will look into it.
+
 ## Inspiration/Why Did I Make This?
 The inspiration for this library was looking into idle/incremental games. These games
 almost always have some sort of exponential growth function and as a result often have to
