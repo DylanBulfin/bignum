@@ -10,6 +10,9 @@ which creates a base with inline ranges and a constant table of powers to improv
 performance. This should be used unless avoiding a `syn/pro_macro2` dependency is
 important.
 
+I haven't done any in-depth benchmarking but from simple testing with `time` it seems like
+this nearly doubles the speed of multiplication
+
 ### Usage
 The goal is that you can call `make_bignum(5, B5Int)`, which creates a base-5 numeric type
 called `B5Int`. This acceps visibility modifiers, e.g. `make_bignum(5, pub B5Int)`. This

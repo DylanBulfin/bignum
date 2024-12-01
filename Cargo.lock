@@ -3,9 +3,19 @@
 version = 4
 
 [[package]]
+name = "bignum-proc-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "bignumbe-rs"
 version = "0.1.7"
 dependencies = [
+ "bignum-proc-macro",
  "rand",
 ]
 
