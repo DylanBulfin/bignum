@@ -4,6 +4,27 @@ memory/runtime footprint (relative to arbitrary-precision libraries). It accompl
 by only storing up to 64 bits in the significand (similar to the floating point
 standard).
 
+## New API
+I've recently added a new procedural macro called `bignumber_rs::create-efficient-base`,
+which creates a base with inline ranges and a constant table of powers to improve
+performance. This should be used unless avoiding a `syn/pro_macro2` dependency is
+important.
+
+### Usage
+The goal is that you can call `make_bignum(5, B5Int)`, which creates a base-5 numeric type
+called `B5Int`. This acceps visibility modifiers, e.g. `make_bignum(5, pub B5Int)`. This
+type you create either by using `u64::into()`, `B5Int::from`, or `B5Int::new(significand,
+exp)`. These can then be used with each other or `u64` in most operations, and can be
+multiplied by `f64` as well. 
+
+#### Future Optimizations
+I want to provide a macro called `parse` that can parse literals of bases up to base-36
+from alphanumeric inputs
+
+I also intend to add a function that takes a float and exponent, storing the result in a
+BigNum type. A common pattern is taking a ratio to the `nth` power, and it's easiest to
+use a float for this calculation.
+
 ## Links
 [docs.rs page](https://docs.rs/bignumbe-rs/latest/bignumbe_rs/)
 

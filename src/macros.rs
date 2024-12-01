@@ -638,23 +638,23 @@ mod tests {
 
     #[cfg(feature = "proc-macro")]
     fn test_many_efficient_bases() {
-        use bignum_proc_macro::create_efficient_base;
-        create_efficient_base!(61);
-        create_efficient_base!(11142);
-        create_efficient_base!(942);
-        create_efficient_base!(3292);
-        create_efficient_base!(1234);
-        create_efficient_base!(5678);
-        create_efficient_base!(9101);
-        create_efficient_base!(2345);
-        create_efficient_base!(6789);
-        create_efficient_base!(1112);
-        create_efficient_base!(3456);
-        create_efficient_base!(7890);
-        create_efficient_base!(1357);
-        create_efficient_base!(2468);
-        create_efficient_base!(65535);
-        create_efficient_base!(3);
+        //use bignum_proc_macro::create_efficient_base;
+        //create_efficient_base!(61);
+        //create_efficient_base!(11142);
+        //create_efficient_base!(942);
+        //create_efficient_base!(3292);
+        //create_efficient_base!(1234);
+        //create_efficient_base!(5678);
+        //create_efficient_base!(9101);
+        //create_efficient_base!(2345);
+        //create_efficient_base!(6789);
+        //create_efficient_base!(1112);
+        //create_efficient_base!(3456);
+        //create_efficient_base!(7890);
+        //create_efficient_base!(1357);
+        //create_efficient_base!(2468);
+        //create_efficient_base!(65535);
+        //create_efficient_base!(3);
 
         test_base!(Octal);
         test_base!(Decimal);

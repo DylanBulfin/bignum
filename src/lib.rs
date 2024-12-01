@@ -602,7 +602,11 @@ max_sig:
             (self, other)
         };
 
-        max.exp == min.exp && max.sig - min.sig <= margin
+        if max.exp == min.exp && max.sig - min.sig <= margin {
+            true
+        } else {
+            false
+        }
     }
 }
 
