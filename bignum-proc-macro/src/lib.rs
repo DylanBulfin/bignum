@@ -1,3 +1,5 @@
+use std::num::{NonZeroU32, NonZeroU64};
+
 use bignumbe_rs::{Base, ExpRange, SigRange};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
@@ -12,15 +14,13 @@ struct BaseData {
 
 #[proc_macro]
 pub fn create_efficient_base(input: TokenStream) -> TokenStream {
-    let number: u64 = if let Lit::Int(li) = parse_macro_input!(input as Lit) {
+    let number: u16 = if let Lit::Int(li) = parse_macro_input!(input as Lit) {
         li.base10_parse()
             .expect("Input must be a valid base-10 number")
     } else {
         panic!("Input must be a valid u16 value greater than 2");
     };
-    if number > u16::MAX as u64 {
-        panic!("Input must be a valid u16 value greater than 2");
-    }
+    let number = number as u64;
 
     let base_ident = format_ident!("Base{}", number);
 

@@ -8,10 +8,13 @@ documentation = "https://docs.rs/bignumbe-rs/latest/bignumbe_rs"
 license = "GPL-3.0"
 
 [features]
+# default = ["proc-macro"]
 random = ["dep:rand"]
+proc-macro = ["dep:bignum-proc-macro"]
 
 [dependencies]
 rand = {version = "0.8.5", optional = true}
+bignum-proc-macro = { path = "./bignum-proc-macro", optional = true }
 
 [dev-dependencies]
 rand = "0.8.5"
