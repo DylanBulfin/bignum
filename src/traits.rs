@@ -150,7 +150,6 @@ mod tests {
 
         assert!(res.fuzzy_eq(BigNum::new(1, 1000), 1000));
         assert!(res3.fuzzy_eq(BigNum3::new(1, 1000), 1000));
-        //assert!(res1422.fuzzy_eq(BigNum1422::new(1, 1000), 1000));
-        //assert_eq_bignum!(res1422, BigNum1422::new(1, 1000));
+        assert!(res1422.fuzzy_eq(BigNum1422::new(1, 1000), 1000 * 1422));
     }
 }

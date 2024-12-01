@@ -596,14 +596,18 @@ max_sig:
     /// operations performed on each operand. E.g. for `n: BigNumDec`, to ensure that
     /// (n * 1000) / 500 = (n / 500) * 1000, you might use a margin of 4
     pub fn fuzzy_eq(self, other: Self, margin: u64) -> bool {
+        let SigRange(min_sig, max_sig) = self.base.sig_range();
+
         let (min, max) = if self > other {
             (other, self)
         } else {
             (self, other)
         };
 
-        if max.exp == min.exp && max.sig - min.sig <= margin {
-            true
+        if max.exp == min.exp {
+            max.sig - min.sig <= margin
+        } else if max.exp == min.exp.wrapping_add(1) {
+            max.sig.saturating_sub(margin) <= min_sig && min.sig.saturating_add(margin) >= max_sig
         } else {
             false
         }
