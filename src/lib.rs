@@ -4,6 +4,10 @@
 //! goal for this type was that it can implement `Copy` and as a result it can be used in
 //! almost any context a normal unsigned integer would be valid.
 
+// public re-exporting
+#[cfg(feature = "proc-macro")]
+pub use bignum_proc_macro::{create_efficient_base, make_bignum};
+
 use std::{
     cmp::Ordering,
     fmt::{Debug, Display},

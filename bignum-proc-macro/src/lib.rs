@@ -45,7 +45,7 @@ pub fn make_bignum(input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Called like create_efficient_base_bare(n), where n is the number of the base
+/// Called like create_efficient_base(n), where n is the number of the base
 #[proc_macro]
 pub fn create_efficient_base(input: TokenStream) -> TokenStream {
     create_efficient_base_core(parse_macro_input!(input as Lit))

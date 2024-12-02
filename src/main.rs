@@ -1,4 +1,3 @@
-use bignum_proc_macro::{create_efficient_base, make_bignum};
 use bignumbe_rs::{
     create_default_base,
     traits::{Pred, Succ},
@@ -23,6 +22,8 @@ use bignumbe_rs::{
 //        end = end.pred();
 //    }
 //}
+
+fn main() {}
 
 //fn main() {
 //    make_bignum!(3, BigNum);

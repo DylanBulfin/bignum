@@ -587,9 +587,10 @@ macro_rules! create_default_base {
 
 #[cfg(test)]
 mod tests {
+    use crate as bignumbe_rs;
     use crate::{
         macros::test_macros::{create_and_test_base, test_base},
-        Base, BigNumBase,
+        Base, BigNumBase, Decimal, Octal,
     };
 
     #[test]
@@ -636,25 +637,44 @@ mod tests {
         test_base!(Decimal);
     }
 
+    #[test]
     #[cfg(feature = "proc-macro")]
     fn test_many_efficient_bases() {
-        //use bignum_proc_macro::create_efficient_base;
-        //create_efficient_base!(61);
-        //create_efficient_base!(11142);
-        //create_efficient_base!(942);
-        //create_efficient_base!(3292);
-        //create_efficient_base!(1234);
-        //create_efficient_base!(5678);
-        //create_efficient_base!(9101);
-        //create_efficient_base!(2345);
-        //create_efficient_base!(6789);
-        //create_efficient_base!(1112);
-        //create_efficient_base!(3456);
-        //create_efficient_base!(7890);
-        //create_efficient_base!(1357);
-        //create_efficient_base!(2468);
-        //create_efficient_base!(65535);
-        //create_efficient_base!(3);
+        use crate::{Base, BigNumBase, Decimal, ExpRange, Octal, SigRange};
+        use bignum_proc_macro::create_efficient_base;
+        create_efficient_base!(61);
+        create_efficient_base!(11142);
+        create_efficient_base!(942);
+        create_efficient_base!(3292);
+        create_efficient_base!(1234);
+        create_efficient_base!(5678);
+        create_efficient_base!(9101);
+        create_efficient_base!(2345);
+        create_efficient_base!(6789);
+        create_efficient_base!(1112);
+        create_efficient_base!(3456);
+        create_efficient_base!(7890);
+        create_efficient_base!(1357);
+        create_efficient_base!(2468);
+        create_efficient_base!(65535);
+        create_efficient_base!(3);
+
+        test_base!(__Base61);
+        test_base!(__Base11142);
+        test_base!(__Base942);
+        test_base!(__Base3292);
+        test_base!(__Base1234);
+        test_base!(__Base5678);
+        test_base!(__Base9101);
+        test_base!(__Base2345);
+        test_base!(__Base6789);
+        test_base!(__Base1112);
+        test_base!(__Base3456);
+        test_base!(__Base7890);
+        test_base!(__Base1357);
+        test_base!(__Base2468);
+        test_base!(__Base65535);
+        test_base!(__Base3);
 
         test_base!(Octal);
         test_base!(Decimal);
