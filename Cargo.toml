@@ -1,5 +1,6 @@
 [package]
 name = "bignumbe-rs"
+author = "Dylan Bulfin"
 version = "0.1.8"
 edition = "2021"
 description = "Large, medium-precision numbers"
@@ -13,9 +14,9 @@ proc-macro = ["dep:bignum-proc-macro"]
 
 [dependencies]
 rand = { version = "0.8.5", optional = true }
-bignum-proc-macro = { path = "./bignum-proc-macro", optional = true }
+bignum-proc-macro = { version = "0.1.0", optional = true }
 
 # Placed here to make them available for testing
 [dev-dependencies]
 rand = "0.8.5"
-bignum-proc-macro = { path = "./bignum-proc-macro"}
+bignum-proc-macro = "0.1.0"

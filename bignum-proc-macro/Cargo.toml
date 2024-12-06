@@ -1,7 +1,12 @@
 [package]
-name = "bignum-proc-macro"
+name = "bignumbe-rs-macro"
+author = "Dylan Bulfin"
 version = "0.1.0"
 edition = "2021"
+description = "Macro for an efficient arbitrary base for bignumbe-rs library"
+repository = "https://github.com/DylanBulfin/bignumbe-rs"
+documentation = "https://docs.rs/bignumbe-rs/latest/bignumbe_rs_macro"
+license = "GPL-3.0"
 
 [lib]
 proc-macro = true
