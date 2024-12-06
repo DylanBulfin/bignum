@@ -14,9 +14,9 @@ proc-macro = ["dep:bignum-proc-macro"]
 
 [dependencies]
 rand = { version = "0.8.5", optional = true }
-bignum-proc-macro = { version = "0.1.0", optional = true }
+bignumbe-rs-proc-macro = { version = "0.1.0", optional = true }
 
 # Placed here to make them available for testing
 [dev-dependencies]
 rand = "0.8.5"
-bignum-proc-macro = "0.1.0"
+bignumbe-rs-proc-macro = "0.1.0"
