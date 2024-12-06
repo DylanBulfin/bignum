@@ -5,7 +5,7 @@
 //! almost any context a normal unsigned integer would be valid.
 
 // public re-exporting
-#[cfg(feature = "proc-macro")]
+#[cfg(feature = "macro")]
 pub use bignum_proc_macro::{create_efficient_base, make_bignum};
 
 use std::{

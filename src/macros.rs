@@ -638,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "proc-macro")]
+    #[cfg(feature = "macro")]
     fn test_many_efficient_bases() {
         use crate::{Base, BigNumBase, Decimal, ExpRange, Octal, SigRange};
         use bignum_proc_macro::create_efficient_base;

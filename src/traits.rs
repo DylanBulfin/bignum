@@ -95,7 +95,7 @@ where
                     res *= self.powi(remaining_pow);
                     break;
                 } else {
-                    res *= self.powi(max_pow as i32);
+                    res *= self.powi(max_pow);
                     remaining_pow -= max_pow;
                 }
             }
@@ -111,7 +111,7 @@ mod tests {
 
     use crate::{
         create_default_base,
-        macros::test_macros::{assert_close_bignum, assert_eq_bignum},
+        macros::test_macros::assert_eq_bignum,
         BigNumBase, Binary,
     };
 

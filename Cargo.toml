@@ -1,6 +1,5 @@
 [package]
 name = "bignumbe-rs"
-author = "Dylan Bulfin"
 version = "0.1.8"
 edition = "2021"
 description = "Large, medium-precision numbers"

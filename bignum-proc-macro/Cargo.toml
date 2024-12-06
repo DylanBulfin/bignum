@@ -1,6 +1,5 @@
 [package]
 name = "bignumbe-rs-macro"
-author = "Dylan Bulfin"
 version = "0.1.0"
 edition = "2021"
 description = "Macro for an efficient arbitrary base for bignumbe-rs library"
