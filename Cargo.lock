@@ -3,20 +3,22 @@
 version = 4
 
 [[package]]
-name = "bignum-proc-macro"
+name = "bignumbe-rs"
+version = "0.1.8"
+dependencies = [
+ "bignumbe-rs-macro",
+ "rand",
+]
+
+[[package]]
+name = "bignumbe-rs-macro"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9534853efd98a05eeb4c5c367307c344be19f9812c628034bfabb18859469a58"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "bignumbe-rs"
-version = "0.1.7"
-dependencies = [
- "bignum-proc-macro",
- "rand",
 ]
 
 [[package]]
