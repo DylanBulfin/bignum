@@ -89,14 +89,22 @@ where
             res *= self.powi(n);
         } else {
             let mut remaining_pow = n;
+            let mut divisions = 0;
 
             loop {
                 if remaining_pow <= max_pow {
+                    //res *= self.powi(remaining_pow);
                     res *= self.powi(remaining_pow);
+                    for _ in 0..divisions {
+                        res *= res;
+                    }
                     break;
-                } else {
-                    res *= self.powi(max_pow);
+                } else if remaining_pow <= max_pow * 25 {
                     remaining_pow -= max_pow;
+                    res *= self.powi(max_pow);
+                } else {
+                    remaining_pow /= 2;
+                    divisions += 1;
                 }
             }
         }
@@ -110,9 +118,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        create_default_base,
-        macros::test_macros::assert_eq_bignum,
-        BigNumBase, Binary,
+        create_default_base, macros::test_macros::assert_eq_bignum, BigNumBase, BigNumBin, Binary,
     };
 
     // Other tests are in the normal macro so we can test it with many different bases
@@ -137,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn test() {
+    fn test_bignum_pow() {
         type BigNum = BigNumBase<Binary>;
         create_default_base!(Base3, 3);
         type BigNum3 = BigNumBase<Base3>;
@@ -149,7 +155,53 @@ mod tests {
         let res1422: BigNum1422 = 1422.0.pow(1000);
 
         assert!(res.fuzzy_eq(BigNum::new(1, 1000), 1000));
-        assert!(res3.fuzzy_eq(BigNum3::new(1, 1000), 1000));
-        assert!(res1422.fuzzy_eq(BigNum1422::new(1, 1000), 1000 * 1422));
+        assert!(res3.fuzzy_eq(BigNum3::new(1, 1000), 1000000));
+        assert!(
+            res1422.fuzzy_eq(BigNum1422::new(1, 1000), 1000000),
+            "{:?} {:?}",
+            res1422,
+            BigNum1422::new(1, 1000)
+        );
+    }
+
+    #[test]
+    fn test_bignum_pow2() {
+        type BigNum = BigNumBin;
+        assert_eq!(2f64.pow(10), BigNum::from(1024));
+        assert_eq!(2f64.pow(20), BigNum::from(1024 * 1024));
+
+        let act: BigNum = 2f64.pow(200_000);
+        let exp = BigNum::new(1, 200_000);
+        let (min, max) = if act > exp { (exp, act) } else { (act, exp) };
+
+        assert!(
+            min.fuzzy_eq(max, u64::MAX / 1_000_000),
+            "{:?} {:?}",
+            min,
+            max
+        );
+
+        let act: BigNum = 2f64.pow(2_000_000);
+        let exp = BigNum::new(1, 2_000_000);
+        let (min, max) = if act > exp { (exp, act) } else { (act, exp) };
+
+        assert!(
+            min.fuzzy_eq(max, u64::MAX / 1_000_000),
+            "{:?} {:?}",
+            min,
+            max
+        );
+
+        let act: BigNum = 2f64.pow(2_000_000_000);
+        let exp = BigNum::new(1, 2_000_000_000);
+        let (min, max) = if act > exp { (exp, act) } else { (act, exp) };
+
+        // With powers this large we give up a huge amount of precision so it's not recommended
+        assert!(
+            max.exp as f64 / (max.exp - min.exp) as f64 > 10_000.,
+            "{} {}",
+            min.exp,
+            max.exp
+        );
     }
 }

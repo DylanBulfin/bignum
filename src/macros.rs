@@ -587,10 +587,9 @@ macro_rules! create_default_base {
 
 #[cfg(test)]
 mod tests {
-    use crate as bignumbe_rs;
     use crate::{
         macros::test_macros::{create_and_test_base, test_base},
-        Base, BigNumBase, Decimal, Octal,
+        Base, BigNumBase,
     };
 
     #[test]
